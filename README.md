@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/img/logo.png" alt="SBC-NG" width="120" />
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/f12d0426-9ab6-4951-8dba-0b9d3055cb82" />
 
 # SBC-NG
 
