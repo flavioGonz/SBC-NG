@@ -3,6 +3,10 @@
 #
 #  Todo lo del borde y nada más: no hay Asterisk, no hay CDR, no hay grabaciones.
 #  La base es propia (sbcng): SBC-NG no comparte una sola tabla con la central.
+#
+#  Kamailio y rtpengine corren en modo host a propósito: el SIP y el RTP tienen
+#  que ver las IPs reales. Si pasaran por el NAT de Docker, el SDP anunciaría la
+#  IP del contenedor y el audio no llegaría a ningún lado.
 # ============================================================================
 name: sbcng
 
@@ -16,13 +20,19 @@ services:
       POSTGRES_PASSWORD: ${DB_PASS:?falta DB_PASS en el .env}
     volumes:
       - sbc_db:/var/lib/postgresql/data
+    ports:
+      # Kamailio corre en modo host, así que necesita llegar a la base por la IP
+      # del host. Se publica sólo en loopback: no queda expuesta a la red.
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sbcng}"]
       interval: 10s
       retries: 5
 
   control-plane:
-    build: ../control-plane
+    build:
+      context: ..
+      dockerfile: control-plane/Dockerfile
     image: sbcng/control-plane:${VERSION:-0.1.0}
     restart: unless-stopped
     depends_on:
@@ -33,56 +43,59 @@ services:
       DB_USER: ${DB_USER:-sbcng}
       DB_PASS: ${DB_PASS}
       JWT_SECRET: ${JWT_SECRET}
-      KAMAILIO_RPC: http://kamailio:5060/RPC
-      RTPENGINE_HOST: rtpengine
+      # Kamailio y rtpengine viven en el host (modo host), no en la red de docker.
+      KAMAILIO_RPC: http://${HOST_IP:-172.17.0.1}:8088/RPC
+      RTPENGINE_HOST: ${HOST_IP:-172.17.0.1}
       PUBLIC_IP: ${PUBLIC_IP}
       DOMAIN: ${DOMAIN}
     ports:
       - "3100:3100"
 
   kamailio:
-    build: ../docker/images/kamailio
+    build:
+      context: .
+      dockerfile: images/kamailio/Dockerfile
     image: sbcng/kamailio:${VERSION:-0.1.0}
     restart: unless-stopped
-    network_mode: host      # SIP necesita ver las IPs reales, no las de docker
+    network_mode: host
     depends_on:
       postgres: { condition: service_healthy }
     environment:
-      DB_URL: postgres://${DB_USER:-sbcng}:${DB_PASS}@127.0.0.1:5432/${DB_NAME:-sbcng}
+      DB_HOST: 127.0.0.1
+      DB_NAME: ${DB_NAME:-sbcng}
+      DB_USER: ${DB_USER:-sbcng}
+      DB_PASS: ${DB_PASS}
       PUBLIC_IP: ${PUBLIC_IP}
-      DOMAIN: ${DOMAIN}
+      TRUSTED_NET: ${TRUSTED_NET:-}
 
   rtpengine:
-    build: ../docker/images/rtpengine
+    build:
+      context: .
+      dockerfile: images/rtpengine/Dockerfile
     image: sbcng/rtpengine:${VERSION:-0.1.0}
     restart: unless-stopped
-    network_mode: host      # el RTP no puede pasar por el NAT de docker
+    network_mode: host
     environment:
       PUBLIC_IP: ${PUBLIC_IP}
       PORT_MIN: ${RTP_PORT_MIN:-30000}
       PORT_MAX: ${RTP_PORT_MAX:-40000}
-      # Transcoding: lo que permite meter WebRTC (Opus) contra un operador que sólo habla G.729
-      CODECS: ${CODECS:-PCMU,PCMA,G722,opus,G729}
 
   coturn:
-    build: ../docker/images/coturn
+    build:
+      context: .
+      dockerfile: images/coturn/Dockerfile
     image: sbcng/coturn:${VERSION:-0.1.0}
     restart: unless-stopped
     network_mode: host
     environment:
       PUBLIC_IP: ${PUBLIC_IP}
+      DOMAIN: ${DOMAIN}
       TURN_REALM: ${DOMAIN}
       TURN_USER: ${TURN_USER:-sbcng}
       TURN_PASS: ${TURN_PASS:?falta TURN_PASS en el .env}
+      TURN_PORT_MIN: ${TURN_PORT_MIN:-49152}
+      TURN_PORT_MAX: ${TURN_PORT_MAX:-65535}
     profiles: ["turn"]
-
-  wsbridge:
-    build: ../docker/images/wsbridge
-    image: sbcng/wsbridge:${VERSION:-0.1.0}
-    restart: unless-stopped
-    environment:
-      SIP_HOST: ${PUBLIC_IP}
-    profiles: ["webrtc"]
 
 volumes:
   sbc_db:
