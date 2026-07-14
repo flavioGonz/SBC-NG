@@ -15,7 +15,7 @@ FROM debian:12-slim AS build
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential git pkg-config cmake \
+      build-essential git pkg-config cmake gperf \
       libglib2.0-dev libssl-dev libavcodec-dev libavformat-dev libavutil-dev \
       libswresample-dev libavfilter-dev libevent-dev libpcap-dev libxmlrpc-core-c3-dev \
       libhiredis-dev libjson-glib-dev libcurl4-openssl-dev libmosquitto-dev \
@@ -29,22 +29,32 @@ RUN git clone --depth 1 https://github.com/BelledonneCommunications/bcg729.git /
     && make -j"$(nproc)" && make install && ldconfig
 
 ARG RTPENGINE_VERSION=mr11.5.1.24
-# Se compila SIN la opción de iptables: Debian 12 ya no trae `libiptc` (la sacaron),
-# y esa opción sólo sirve para el forwarding por módulo de kernel, que no usamos —
-# nos alcanza el forwarding en espacio de usuario. El transcoding, que es lo que nos
-# importa, no depende de eso.
+# Dos cosas que no son obvias y cuestan una tarde cada una:
+#
+#  1. Se compila SIN la opción de iptables. Debian 12 ya no trae `libiptc` (la
+#     sacaron), y esa opción sólo sirve para el forwarding por módulo de kernel,
+#     que no usamos: nos alcanza el de espacio de usuario. El transcoding —que es
+#     lo que nos importa— no depende de eso.
+#
+#  2. Se compila el target `rtpengine`, no `all`. `all` incluye el man page, que
+#     se genera con pandoc… y meter pandoc (con medio Haskell atrás) en la imagen
+#     para tener una página de manual que nadie va a leer es absurdo.
 RUN git clone --depth 1 --branch ${RTPENGINE_VERSION} \
       https://github.com/sipwise/rtpengine.git /src/rtpengine \
     && cd /src/rtpengine/daemon \
-    && make -j"$(nproc)" with_iptables_option=no with_transcoding=yes
+    && make -j"$(nproc)" with_iptables_option=no with_transcoding=yes rtpengine
 
 FROM debian:12-slim
 ENV DEBIAN_FRONTEND=noninteractive
+# Ojo con las librerías de runtime: si falta una, la imagen construye igual y el
+# contenedor se cae al arrancar con "cannot open shared object file". libevent
+# viene partida en dos paquetes (core y pthreads) y rtpengine usa las dos.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libglib2.0-0 libssl3 libavcodec59 libavformat59 libavutil57 libswresample4 \
-      libavfilter8 libevent-2.1-7 libpcap0.8 libxmlrpc-core-c3 libhiredis0.14 \
+      libavfilter8 libevent-2.1-7 libevent-pthreads-2.1-7 libevent-core-2.1-7 \
+      libpcap0.8 libxmlrpc-core-c3 libhiredis0.14 \
       libjson-glib-1.0-0 libcurl4 libmosquitto1 libwebsockets17 libspandsp2 libopus0 \
-      libmnl0 libnftnl11 iproute2 ca-certificates \
+      libmnl0 libnftnl11 libmariadb3 iproute2 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /src/rtpengine/daemon/rtpengine /usr/local/bin/rtpengine
