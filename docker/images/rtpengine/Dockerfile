@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libswresample-dev libavfilter-dev libevent-dev libpcap-dev libxmlrpc-core-c3-dev \
       libhiredis-dev libjson-glib-dev libcurl4-openssl-dev libmosquitto-dev \
       libwebsockets-dev libspandsp-dev libopus-dev libmnl-dev libnftnl-dev \
-      ca-certificates \
+      default-libmysqlclient-dev ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # G.729 (bcg729): el códec que piden los operadores viejos y que WebRTC no habla.
@@ -29,9 +29,14 @@ RUN git clone --depth 1 https://github.com/BelledonneCommunications/bcg729.git /
     && make -j"$(nproc)" && make install && ldconfig
 
 ARG RTPENGINE_VERSION=mr11.5.1.24
+# Se compila SIN la opción de iptables: Debian 12 ya no trae `libiptc` (la sacaron),
+# y esa opción sólo sirve para el forwarding por módulo de kernel, que no usamos —
+# nos alcanza el forwarding en espacio de usuario. El transcoding, que es lo que nos
+# importa, no depende de eso.
 RUN git clone --depth 1 --branch ${RTPENGINE_VERSION} \
       https://github.com/sipwise/rtpengine.git /src/rtpengine \
-    && cd /src/rtpengine/daemon && make -j"$(nproc)"
+    && cd /src/rtpengine/daemon \
+    && make -j"$(nproc)" with_iptables_option=no with_transcoding=yes
 
 FROM debian:12-slim
 ENV DEBIAN_FRONTEND=noninteractive

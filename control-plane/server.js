@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const kam = require('./kamailio');
 const rtp = require('./rtpengine');
+const net = require('./network');
 
 const PORT = +(process.env.PORT || 3100);
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(24).toString('hex');
@@ -162,6 +163,29 @@ app.post('/api/v1/security/unblock', async (req, res) => {
     await db.pool.query('DELETE FROM sbc_blocked WHERE ip=$1', [ip]);
     await kam.htableDelete('ipban', ip).catch(() => {});
     res.json({ ok: true, ip });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ─────────────── red: las dos patas del SBC ───────────────
+ *
+ * WAN (la que da a internet) y LAN (la que va a la central). El panel las
+ * dibuja con un RJ45 verde o rojo, porque el 80% de los "no anda nada" es
+ * literalmente un cable desenchufado — y hoy eso no se ve en ningún lado.
+ */
+
+app.get('/api/v1/network', async (req, res) => {
+  try {
+    const [ifaces, rutas] = await Promise.all([Promise.resolve(net.conTasas()), net.rutas()]);
+    const wan = ifaces.find((i) => i.rol === 'wan') || null;
+    res.json({
+      interfaces: ifaces,
+      rutas,
+      resumen: {
+        wan: wan ? wan.name : null,
+        wan_ok: !!(wan && wan.estado === 'conectada'),
+        caidas: ifaces.filter((i) => i.estado !== 'conectada').map((i) => i.name),
+      },
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -37,19 +37,22 @@ services:
     restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
+    # También en modo host, y no por capricho: el panel muestra las interfaces
+    # LAN/WAN del SBC (el RJ45 verde o rojo). Dentro de la red de docker sólo
+    # vería su propio veth, que no le sirve a nadie. Además así alcanza a
+    # Kamailio y a rtpengine por loopback.
+    network_mode: host
     environment:
-      DB_HOST: postgres
+      PORT: 3100
+      DB_HOST: 127.0.0.1
       DB_NAME: ${DB_NAME:-sbcng}
       DB_USER: ${DB_USER:-sbcng}
       DB_PASS: ${DB_PASS}
       JWT_SECRET: ${JWT_SECRET}
-      # Kamailio y rtpengine viven en el host (modo host), no en la red de docker.
-      KAMAILIO_RPC: http://${HOST_IP:-172.17.0.1}:8088/RPC
-      RTPENGINE_HOST: ${HOST_IP:-172.17.0.1}
+      KAMAILIO_RPC: http://127.0.0.1:8088/RPC
+      RTPENGINE_HOST: 127.0.0.1
       PUBLIC_IP: ${PUBLIC_IP}
       DOMAIN: ${DOMAIN}
-    ports:
-      - "3100:3100"
 
   kamailio:
     build:

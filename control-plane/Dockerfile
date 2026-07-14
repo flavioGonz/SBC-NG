@@ -6,6 +6,9 @@
 FROM node:20-alpine
 WORKDIR /app
 
+# iproute2: el panel lee las rutas del SBC con `ip route` (las interfaces salen de /sys).
+RUN apk add --no-cache iproute2
+
 COPY control-plane/package.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 
