@@ -14,7 +14,8 @@ de un Asterisk propio… o de la central que ya tengas y no pensás cambiar.
 
 <br>
 
-![Panel de SBC-NG](docs/img/01-dashboard.png)
+<img width="1919" height="929" alt="image" src="https://github.com/user-attachments/assets/6f20062c-5a5b-4d89-9dd4-9c5e0fb25eb7" />
+
 
 <sub>**Figura 1** · El panel de SBC-NG: llamadas en curso, ataques bloqueados y el estado de cada interfaz, en vivo · `01-dashboard.png`</sub>
 
