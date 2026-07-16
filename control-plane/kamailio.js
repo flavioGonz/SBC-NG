@@ -30,10 +30,13 @@ const secfilterReload = () => rpc('secfilter.reload');
 const htableGet = (t) => rpc('htable.dump', [t]);
 const htableSet = (t, k, v) => rpc('htable.seti', [t, k, v]);
 const htableDelete = (t, k) => rpc('htable.delete', [t, k]);
+// Llamadas vivas: el modulo dialog las cuenta. ongoing = establecidas; all = incluye las que estan por conectar.
+const dlgActivas = () => rpc('dlg.stats_active');
 
 module.exports = {
   rpc, stats, uptime, version,
   dispatcherList, dispatcherReload,
   registrations, secfilterReload,
   htableGet, htableSet, htableDelete,
+  dlgActivas,
 };

@@ -1,0 +1,113 @@
+:root { --sbc-accent: #2f74e6; --sbc-accent2: #06b6d4; }
+
+/* ===== Esquema OSCURO ===== */
+[data-mantine-color-scheme="dark"] html { background: #0d1117; }
+[data-mantine-color-scheme="dark"] body {
+  background:
+    radial-gradient(900px 520px at 88% -6%, rgba(47,116,230,.14), transparent 60%),
+    radial-gradient(820px 480px at -6% 108%, rgba(6,182,212,.10), transparent 58%),
+    #0d1117;
+  background-attachment: fixed; color: #e8ebf0;
+}
+[data-mantine-color-scheme="dark"] .mantine-AppShell-navbar { background: rgba(12,16,24,.82); border-right: 1px solid rgba(120,130,150,.12); }
+[data-mantine-color-scheme="dark"] .mantine-AppShell-header { background: rgba(12,16,24,.7); border-bottom: 1px solid rgba(120,130,150,.12); }
+[data-mantine-color-scheme="dark"] .mantine-Table-thead th, [data-mantine-color-scheme="dark"] .mantine-Table-th { background: #131a25; }
+[data-mantine-color-scheme="dark"] .mantine-Table-tbody tr:hover { background: rgba(48,62,90,.42) !important; }
+[data-mantine-color-scheme="dark"] .mantine-NavLink-root:hover { background: rgba(60,80,130,.16); }
+
+/* ===== Esquema CLARO ===== */
+[data-mantine-color-scheme="light"] html { background: #eef2fb; }
+[data-mantine-color-scheme="light"] body {
+  background:
+    radial-gradient(1000px 520px at 90% -8%, rgba(47,116,230,.08), transparent 58%),
+    radial-gradient(900px 480px at -8% 110%, rgba(6,182,212,.06), transparent 55%),
+    #f5f7fc;
+  background-attachment: fixed; color: #1b2233;
+}
+[data-mantine-color-scheme="light"] .mantine-AppShell-navbar { background: rgba(251,252,255,.85); border-right: 1px solid rgba(40,60,120,.08); }
+[data-mantine-color-scheme="light"] .mantine-AppShell-header { background: rgba(255,255,255,.8); border-bottom: 1px solid rgba(40,60,120,.08); }
+[data-mantine-color-scheme="light"] .mantine-Table-thead th, [data-mantine-color-scheme="light"] .mantine-Table-th { background: #eef2f8; }
+[data-mantine-color-scheme="light"] .mantine-Table-tbody tr:hover { background: rgba(48,90,200,.06) !important; }
+[data-mantine-color-scheme="light"] .mantine-NavLink-root:hover { background: rgba(40,70,160,.06); }
+
+/* ===== Comunes ===== */
+.mantine-AppShell-navbar { transition: width .22s cubic-bezier(.4,0,.2,1); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.mantine-AppShell-header { backdrop-filter: saturate(160%) blur(12px); -webkit-backdrop-filter: saturate(160%) blur(12px); }
+.mantine-Card-root { transition: box-shadow .2s ease, border-color .2s ease, transform .2s ease; }
+.mantine-Card-root, .mantine-Paper-root { box-shadow: none !important; }
+.mantine-Card-root:hover { border-color: rgba(120,150,220,.28); }
+.mantine-Table-tbody tr { transition: background .12s ease; }
+.mantine-Table-thead th, .mantine-Table-th { position: sticky; top: 0; z-index: 3; }
+body, .mantine-AppShell-navbar, .mantine-AppShell-header, .mantine-AppShell-main, .mantine-Card-root, .mantine-Paper-root, .mantine-Table-th, .mantine-Table-td, .mantine-Modal-content, .mantine-Modal-header { transition: background-color .3s ease, border-color .3s ease, color .25s ease; }
+.mantine-NavLink-root { border-radius: 9px; transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
+.mantine-NavLink-root[data-active] { background: linear-gradient(90deg, var(--sbc-accent), #1f63d8) !important; color: #fff !important; box-shadow: 0 6px 16px -4px rgba(47,116,230,.5); }
+.mantine-NavLink-root[data-active] .mantine-NavLink-label { color: #fff; font-weight: 650; }
+.mantine-NavLink-root[data-active] svg { color: #fff; }
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: rgba(120,130,150,.26); border-radius: 9px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(120,140,180,.42); background-clip: padding-box; }
+::selection { background: rgba(47,116,230,.30); }
+
+/* Encabezado de página (barra de acento + chip de ícono) */
+.sbc-pagehead { display: flex; align-items: center; gap: 14px; }
+.sbc-acc-bar { width: 4px; align-self: stretch; border-radius: 4px; }
+.sbc-panel-accent { position: relative; overflow: hidden; }
+.sbc-panel-accent::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--acc, var(--sbc-accent)); opacity: .9; }
+
+/* Entradas, pulsos y transiciones (idénticas a PBX-NG) */
+@keyframes sbcPageIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.sbc-anim { animation: sbcPageIn .35s cubic-bezier(.4,0,.2,1) both; }
+.sbc-pip { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+@keyframes sbcPulse { 0%,100% { opacity: 1 } 50% { opacity: .4 } }
+.sbc-pulse { animation: sbcPulse 2s infinite; }
+[role="tabpanel"] { animation: sbc-tabfade .28s ease; }
+@keyframes sbc-tabfade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.mantine-Modal-content { animation: sbc-modalpop .2s cubic-bezier(.2,.9,.3,1.2); }
+@keyframes sbc-modalpop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+.sbc-fade-in { animation: sbc-fade-in .28s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes sbc-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.sbc-tabin { animation: sbc-tabin .3s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes sbc-tabin { from { opacity: 0; transform: translateX(10px) scale(.995); } to { opacity: 1; transform: none; } }
+.sbc-row { padding: 5px 6px; border-radius: 8px; transition: background .16s ease; }
+.sbc-row:hover { background: var(--mantine-color-default-hover); }
+
+/* Notificaciones (sileo + iconografía propia) */
+.sbc-nico { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 9px; background: color-mix(in srgb, var(--nc) 14%, transparent); }
+.sbc-draw { stroke-dasharray: 42; stroke-dashoffset: 42; animation: sbc-draw .42s cubic-bezier(.2,.9,.3,1) forwards; }
+@keyframes sbc-draw { to { stroke-dashoffset: 0; } }
+.sbc-nico-spin { animation: sbc-spin .9s linear infinite; transform-origin: 50% 50%; }
+@keyframes sbc-spin { to { transform: rotate(360deg); } }
+.sbc-shake { animation: sbc-shake .7s ease-in-out infinite; transform-origin: 50% 50%; }
+@keyframes sbc-shake { 0%,100% { transform: rotate(0); } 20% { transform: rotate(-11deg); } 40% { transform: rotate(9deg); } 60% { transform: rotate(-6deg); } 80% { transform: rotate(4deg); } }
+.sbc-wave path { animation: sbc-wave 1s ease-in-out infinite; }
+@keyframes sbc-wave { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+
+/* El pulso del enlace: recorre la línea entre la troncal y la central. */
+.sbc-flow { stroke-dasharray: 6 10; animation: sbc-flow 1.1s linear infinite; }
+@keyframes sbc-flow { to { stroke-dashoffset: -32; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sbc-draw, .sbc-nico-spin, .sbc-shake, .sbc-wave path, .sbc-flow,
+  .sbc-anim, .sbc-fade-in, .sbc-tabin, .sbc-pulse { animation: none; stroke-dashoffset: 0; }
+}
+
+/* ── sileo: legibilidad ────────────────────────────────────────────────────
+ * sileo pinta el titulo con --sileo-tone (el color del estado) y la descripcion
+ * con un negro/blanco fijo que en tema oscuro queda negro sobre oscuro. Como el
+ * fondo del globo ahora es neutro (lo pone notify.js), forzamos texto de alto
+ * contraste y dejamos el color del estado SOLO en el icono. */
+[data-sileo-viewport] [data-sileo-title] {
+  --sileo-tone: light-dark(#0b1220, #eef2f8) !important;
+  color: light-dark(#0b1220, #eef2f8) !important;
+  font-weight: 650;
+  text-transform: none !important;   /* "UCM-IES" no es "Ucm-ies" */
+}
+[data-sileo-viewport] [data-sileo-description],
+[data-sileo-viewport][data-theme="dark"] [data-sileo-description],
+[data-sileo-viewport][data-theme="light"] [data-sileo-description] {
+  color: light-dark(rgba(20,28,40,.62), rgba(226,232,240,.62)) !important;
+}
+/* el badge del icono conserva su color de estado, pero sin el fondo teñido que
+ * lo hacia competir con nuestro SVG */
+[data-sileo-viewport] [data-sileo-badge] { --sileo-tone-bg: transparent !important; }

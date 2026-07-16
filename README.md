@@ -48,12 +48,15 @@ la telefonía IP "no funcione" sin que nadie entienda por qué: el NAT, los cód
 
 | Plano | Componente | Qué hace |
 |---|---|---|
-| **Señalización** | Kamailio | Proxy SIP: filtra, normaliza, rutea y esconde la topología |
-| **Medios** | rtpengine | Ancla el RTP, hace SRTP ↔ RTP y **transcodifica** |
-| **NAT** | coturn | STUN/TURN: WebRTC detrás de cualquier NAT |
-| **WebRTC** | wsbridge | Gateway WSS → SIP: navegadores contra una central que sólo habla SIP |
+| **Señalización** | Motor SIP | Proxy SIP: filtra, normaliza, rutea y esconde la topología |
+| **Medios** | Motor de medios | Ancla el RTP, hace SRTP ↔ RTP y **transcodifica** |
+| **NAT** | TURN Server | STUN/TURN: WebRTC detrás de cualquier NAT |
+| **WebRTC** | Gateway WebRTC | WSS → SIP: navegadores contra una central que sólo habla SIP |
 | **Control** | control-plane | API REST + panel: troncales, ruteo, seguridad, métricas, diagnóstico |
 | **Estado** | PostgreSQL | Base **propia**: SBC-NG no comparte ni una tabla con la central |
+
+<sub>Los motores de señalización, medios y NAT son componentes internos del appliance; el panel y esta
+documentación los nombran de forma neutra (**Motor SIP**, **Motor de medios**, **TURN Server**).</sub>
 
 ![Arquitectura de SBC-NG](docs/img/02-arquitectura.png)
 
@@ -71,6 +74,7 @@ la telefonía IP "no funcione" sin que nadie entienda por qué: el NAT, los cód
   prohibidos, ventanas horarias, corte de números de largo sospechoso.
 - **Anti-loop y anti-inyección SIP**: dos clásicos que tumban centrales enteras.
 - **TLS y SRTP** de punta a punta.
+- **STIR/SHAKEN** disponible (verificación y firma del `Identity`), desactivado por defecto hasta que el operador lo pida.
 
 ![Seguridad en vivo](docs/img/03-seguridad.png)
 
@@ -114,12 +118,33 @@ cd SBC-NG
 sudo ./install.sh
 ```
 
-El instalador levanta todo, migra la base, genera los secretos y te imprime el usuario del panel y
-el token de la API. El panel queda en `http://<tu-servidor>:3100`.
+El instalador es interactivo: pregunta la **IP o dominio público** (o lo autodescubre por STUN), la
+**red confiable** (tu LAN, exenta del anti-flood) y si ya tenés un **proxy inverso**. Después levanta
+el stack con Docker Compose, **corre las migraciones solo**, genera los secretos y te imprime el
+usuario del panel y el token de la API. El panel queda en `http://<tu-servidor>:3100`.
 
 > ⚠️ **Ojo con el firewall.** Si abrís el 5060 pero no el rango RTP, la llamada entra, el teléfono
 > suena, se atiende… y no se escucha nada. Es el error más común y el más confuso, porque la
 > señalización funcionó perfecto. La matriz completa está en [docs/FIREWALL.md](docs/FIREWALL.md).
+
+> 🔌 **Softphones WebRTC detrás de un proxy inverso (NGINX Proxy Manager):** además del panel, hay que
+> publicar el WebSocket SIP con una `location /ws` que apunte al 8088 de Kamailio (el handshake debe
+> responder **101**). El paso a paso está en el [Manual de Instalación](docs/manual/instalacion.md).
+
+### Despliegue y actualización (appliance on-prem)
+
+SBC-NG es un appliance: el código se **hornea en imágenes versionadas** y se despliega por pull/load,
+no con `docker cp`. Para actualizar en producción:
+
+```bash
+git pull
+cd docker
+docker compose build          # o cargar las imágenes versionadas del release
+docker compose up -d           # recrea sólo lo que cambió; las migraciones corren al arrancar
+```
+
+El panel se sirve desde la imagen `dashboard` (Next.js standalone) y el control-plane desde `control-plane`.
+Un cambio de código que el usuario/admin note debe reflejarse en los **manuales** (`/manuales`).
 
 ---
 
@@ -137,7 +162,8 @@ curl -X POST http://tu-sbc:3100/api/v1/attach \
 Eso hace tres cosas de una: la anota como central, la agrega al **dispatcher** (para mandarle las
 llamadas entrantes) y la suma a la lista de IPs confiables (para aceptar sus salientes).
 
-PBX-NG lo hace solo desde su panel. Cualquier otra central se declara con ese `curl`.
+PBX-NG lo hace solo desde su panel. Cualquier otra central se declara con ese `curl` o desde
+**Centrales (attach)** en el panel.
 
 ![Central enganchada](docs/img/08-attach.png)
 
@@ -162,6 +188,7 @@ SBC-NG no inventa nada: implementa los RFC al pie de la letra.
 | **5763 / 5764** | DTLS-SRTP (lo que exige WebRTC) |
 | **7118** | SIP sobre WebSocket |
 | **8445** | ICE |
+| **8224 / 8588** | STIR/SHAKEN (Identity) |
 
 ---
 
@@ -169,7 +196,8 @@ SBC-NG no inventa nada: implementa los RFC al pie de la letra.
 
 | | |
 |---|---|
-| 📖 **[Manual completo](docs/manual/)** | Instalación, configuración y operación, paso a paso |
+| 📖 **[Manuales](docs/manual/)** | Instalación, configuración, operación y **app de escritorio**, paso a paso. También **dentro del panel** (`/manuales`): se leen en pantalla, se exportan a PDF y las capturas se cargan pegando (Ctrl+V) sin recompilar |
+| 🖥 **[App de escritorio (Windows)](docs/manual/escritorio.md)** | El **PBX-NG Softphone**: instalación `.exe`/`.msi`, WebRTC y SIP nativo, códecs, bandeja, atajos globales, click-to-call, auto-update |
 | 🔌 **[API norte](docs/API.md)** | El contrato con la central |
 | 🏗 **[Arquitectura](docs/ARQUITECTURA.md)** | Por qué está hecho así |
 | 🔥 **[Puertos y firewall](docs/FIREWALL.md)** | La matriz completa, y el error del rango RTP |
@@ -182,6 +210,7 @@ SBC-NG no inventa nada: implementa los RFC al pie de la letra.
 |---|---|
 | **0.1.0** | Base propia · control-plane con API norte · transcoding (Opus ↔ G.729) · multi-tenant · CAC · instalador |
 | 0.2 | Panel propio · interfaces LAN/WAN · topología · test de troncal con diagnóstico · HEP/Homer |
+| **0.3** | Motores Kamailio 6.1 + rtpengine mr13.5 · **STIR/SHAKEN** (verificación/firma, off por defecto) · **CAC** por troncal (dialog profiles) · SOC en vivo (banderas por país, bloqueos, timeline) · CDR propio del borde · notificaciones por email con plantillas · **manuales in-panel** (MD→HTML, capturas pegables) + **app de escritorio Windows** · diagnóstico de troncal con detección de SIP ALG · nombres de motor neutros en el panel |
 
 ---
 

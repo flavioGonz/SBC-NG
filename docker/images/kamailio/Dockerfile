@@ -1,4 +1,4 @@
-# SBC-NG · Kamailio 5.6 (señalización del borde)
+# SBC-NG · Kamailio 6.1 (señalización del borde)
 #
 # Sin agente ni psycopg2: el control-plane le habla por RPC (jsonrpcs + xhttp en /RPC).
 # Antes había un agente Python que hacía polling de una tabla de la central; eso ataba
@@ -9,11 +9,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates gnupg wget iproute2 gettext-base postgresql-client tcpdump \
     && wget -qO- https://deb.kamailio.org/kamailiodebkey.gpg | gpg --dearmor > /usr/share/keyrings/kamailio.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/kamailio.gpg] http://deb.kamailio.org/kamailio56 bookworm main" \
+    && echo "deb [signed-by=/usr/share/keyrings/kamailio.gpg] http://deb.kamailio.org/kamailio61 bookworm main" \
        > /etc/apt/sources.list.d/kamailio.list \
     && apt-get update && apt-get install -y --no-install-recommends \
       kamailio kamailio-postgres-modules kamailio-tls-modules kamailio-websocket-modules \
       kamailio-presence-modules kamailio-json-modules kamailio-utils-modules kamailio-extra-modules \
+      kamailio-secsipid-modules \
     && rm -rf /var/lib/apt/lists/*
 
 COPY config/kamailio/ /etc/kamailio/

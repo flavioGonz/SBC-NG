@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SBC-NG · Manual de Operación</title>
+<style>:root{--accent:#0d9488;--soft:#0d948814}
+*{box-sizing:border-box}
+body{margin:0;background:#eef1f6;color:#0f172a;font:16px/1.65 -apple-system,'Segoe UI',Roboto,Inter,Arial,sans-serif}
+.page{max-width:900px;margin:0 auto;background:#fff;box-shadow:0 4px 30px rgba(15,23,42,.07)}   /* ~A4 a 96dpi: 794px de contenido + márgenes */
+.cover{position:relative;min-height:940px;padding:0;background:#fff;color:#0f172a;display:flex;flex-direction:column}
+.cover .bar{height:14px;background:var(--accent)}
+.cover .side{position:absolute;left:0;top:14px;bottom:0;width:8px;background:linear-gradient(180deg,var(--accent),#0f1a30)}
+.cover .inner{padding:58px 64px 46px 74px;display:flex;flex-direction:column;flex:1}
+.cover .brandline{display:flex;align-items:center;gap:14px;border-bottom:1px solid #e8edf4;padding-bottom:18px}
+.cover .mark{width:46px;height:46px;border-radius:11px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px}
+.cover .brand{font-size:19px;font-weight:800;letter-spacing:-.2px}
+.cover .brandsub{font-size:12px;color:#94a3b8}
+.cover .mid{flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px 0}
+.cover .doctype{font-size:12px;font-weight:800;letter-spacing:2.6px;text-transform:uppercase;color:var(--accent)}
+.cover h1{font-size:52px;line-height:1.05;margin:16px 0 0;font-weight:800;letter-spacing:-1px;color:#0f172a}
+.cover .rule{width:96px;height:5px;background:var(--accent);border-radius:3px;margin:26px 0 22px}
+.cover .sub{font-size:19px;color:#475569;max-width:560px;line-height:1.5}
+.cover .metatable{border-top:1px solid #e8edf4;padding-top:22px;display:flex;gap:60px;flex-wrap:wrap}
+.cover .metatable div span{display:block;font-size:10.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#94a3b8;margin-bottom:5px}
+.cover .metatable div b{font-size:14.5px;font-weight:600;color:#334155}
+.cover .foot{margin-top:26px;font-size:11px;color:#94a3b8}
+.cover .wm{position:absolute;right:-40px;top:120px;opacity:.06;transform:rotate(-8deg);pointer-events:none}
+.toc{padding:34px 60px;border-bottom:1px solid #e8edf4;background:#f8fafc}
+.toc h2{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:#94a3b8;margin:0 0 14px}
+.toc a{display:block;color:#334155;text-decoration:none;padding:4px 0;font-size:14.5px;border-left:2px solid transparent;padding-left:12px}
+.toc a:hover{color:var(--accent);border-left-color:var(--accent)}
+.toc a.l3{padding-left:30px;font-size:13.5px;color:#64748b}
+main{padding:44px 64px 70px}
+h1{font-size:30px;margin:0 0 22px}
+h2{font-size:24px;margin:0 0 6px;padding:0;color:#0f172a;letter-spacing:-.3px;scroll-margin-top:20px}
+.chapter{margin:52px 0 20px;padding-top:22px;border-top:3px solid var(--accent)}
+.chapter:first-of-type{margin-top:0;border-top:none;padding-top:0}
+.chapter .num{display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent);margin-bottom:7px}
+h3{font-size:17px;margin:30px 0 10px;color:#1e293b;padding-left:12px;border-left:3px solid #e2e8f0;scroll-margin-top:20px}
+h4{font-size:14.5px;margin:20px 0 8px;color:#475569;font-weight:700}
+p{margin:12px 0}
+code{background:#f1f5f9;padding:2px 6px;border-radius:5px;font:13.5px/1.5 ui-monospace,Consolas,monospace;color:#be123c}
+pre{background:#0f1a30;color:#e2e8f0;padding:16px 18px;border-radius:11px;overflow:auto;margin:16px 0}
+pre code{background:none;color:inherit;padding:0;font-size:13.5px}
+blockquote{margin:18px 0;padding:14px 18px;background:var(--soft);border-left:4px solid var(--accent);border-radius:0 10px 10px 0}
+blockquote p{margin:5px 0;font-size:14.5px;color:#334155}
+.tw{overflow-x:auto;margin:18px 0}
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+th{text-align:left;background:#f8fafc;color:#475569;font-weight:700;font-size:12.5px;letter-spacing:.4px;text-transform:uppercase;padding:11px 13px;border-bottom:2px solid #e8edf4}
+td{padding:11px 13px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+tr:last-child td{border-bottom:none}
+ul,ol{margin:12px 0;padding-left:24px}
+li{margin:6px 0}
+hr{border:none;border-top:1px solid #e8edf4;margin:38px 0}
+.nav{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin:14px 0 18px;padding:11px 15px;background:var(--soft);border:1px solid var(--accent);border-left-width:4px;border-radius:9px;font-size:14px;color:#334155}
+.nav .navk{font-size:10px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:var(--accent);padding-right:4px}
+.nav b{font-weight:700;color:#0f172a}
+.nav .sep{color:#94a3b8;font-weight:400}
+/* Lamina: la imagen es lo primero y ocupa la hoja; el titulo va DEBAJO, como pie de figura. */
+figure.shot{margin:34px 0 30px;text-align:center;break-inside:avoid}
+figure.shot .frame{background:linear-gradient(160deg,#f8fafc,#eef2f7);border:1px solid #e2e8f0;border-radius:14px;padding:14px}
+figure.shot img{display:block;max-width:100%;margin:0 auto;border-radius:9px;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(15,23,42,.13)}
+figure.shot figcaption{margin-top:14px;font-size:14px;color:#334155;font-weight:600;line-height:1.4}
+figure.shot .fig{display:block;font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+figure.shot .fn{display:block;font:11px ui-monospace,Consolas,monospace;color:#cbd5e1;margin-top:5px;font-weight:400}
+figure.shot.ph .frame{border:2px dashed #cbd5e1;background:#f8fafc;padding:56px 20px}
+figure.shot.ph .frame::before{content:'Imagen pendiente';display:block;font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#94a3b8}
+figure.shot.ph .fn{color:var(--accent);font-weight:700;margin-top:6px}
+footer{padding:26px 60px 40px;color:#94a3b8;font-size:12.5px;border-top:1px solid #eef1f7}
+.top{position:fixed;right:22px;bottom:22px;background:var(--accent);color:#fff;border:0;border-radius:11px;padding:11px 16px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(15,23,42,.2)}
+@media print{
+  body{background:#fff}
+  .page{box-shadow:none;max-width:none}
+  .top{display:none}
+  .cover{padding:60px 40px;page-break-after:always}
+  .toc{page-break-after:always}
+  main{padding:0 10px}
+  .chapter{page-break-before:always;page-break-after:avoid;border-top:3px solid var(--accent)}
+  .chapter:first-of-type{page-break-before:avoid}
+  h2,h3{page-break-after:avoid}
+  @page{size:A4;margin:18mm 16mm 20mm}
+  @page{@bottom-right{content:"Pagina " counter(page) " / " counter(pages);font-size:9px;color:#94a3b8}}
+  @page:first{margin:0}
+  @page:first{@bottom-right{content:""}}
+  /* La imagen siempre empieza arriba de la hoja: se lleva su titulo consigo y nada la parte. */
+  figure.shot{break-inside:avoid;margin:20px 0 24px}
+  figure.shot .frame{padding:10px}
+  figure.shot img{max-height:118mm}
+  table,pre,blockquote{page-break-inside:avoid}
+  p,li{orphans:3;widows:3}
+  h4{page-break-after:avoid}
+  a{color:inherit;text-decoration:none}
+}
+</style></head>
+<body>
+<div class="page">
+  <header class="cover">
+      <div class="wm"><svg width="280" height="280" viewBox="0 0 64 64" fill="none" style="opacity:1.0" xmlns="http://www.w3.org/2000/svg" aria-label="SBC-NG"><path d="M32 4.5 L56 13.5 V31 c0 14.4 -9.9 25.5 -24 28.5 C17.9 56.5 8 45.4 8 31 V13.5 Z" fill="none" stroke="#0d9488" stroke-width="3.4" stroke-linejoin="round"/><path d="M20 20 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 a3.5 3.5 0 0 1 -3.5 3.5 h-6 l-5 5 v-5 h-2 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 A3.5 3.5 0 0 1 20 20 Z" fill="none" stroke="#0d9488" stroke-width="3" stroke-linejoin="round"/><path d="M31 27.5 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 A3.5 3.5 0 0 1 44 43.5 h-2 v5 l-5 -5 h-6 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 a3.5 3.5 0 0 1 3.5 -3.5 Z" fill="none" stroke="#0d9488" stroke-width="3" stroke-linejoin="round" opacity="0.65"/></svg></div>
+    <div class="bar"></div><div class="side"></div>
+    <div class="inner">
+      <div class="brandline">
+        <div class="mark"><svg width="30" height="30" viewBox="0 0 64 64" fill="none" style="opacity:1.0" xmlns="http://www.w3.org/2000/svg" aria-label="SBC-NG"><path d="M32 4.5 L56 13.5 V31 c0 14.4 -9.9 25.5 -24 28.5 C17.9 56.5 8 45.4 8 31 V13.5 Z" fill="none" stroke="#fff" stroke-width="3.4" stroke-linejoin="round"/><path d="M20 20 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 a3.5 3.5 0 0 1 -3.5 3.5 h-6 l-5 5 v-5 h-2 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 A3.5 3.5 0 0 1 20 20 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M31 27.5 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 A3.5 3.5 0 0 1 44 43.5 h-2 v5 l-5 -5 h-6 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 a3.5 3.5 0 0 1 3.5 -3.5 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round" opacity="0.65"/></svg></div>
+        <div>
+          <div class="brand">SBC-NG</div>
+          <div class="brandsub">Session Border Controller · el borde de tu telefonía</div>
+        </div>
+      </div>
+      <div class="mid">
+        <div class="doctype">Documentación oficial</div>
+        <h1>Manual de Operación</h1>
+        <div class="rule"></div>
+        <div class="sub">Monitoreo, diagnóstico y respuesta</div>
+      </div>
+      <div class="metatable">
+        <div><span>Dirigido a</span><b>Operador / NOC</b></div>
+        <div><span>Versión del producto</span><b>0.2.0</b></div>
+        <div><span>Actualizado</span><b>16/07/2026</b></div>
+        <div><span>Documento</span><b>OPERACION</b></div>
+      </div>
+      <div class="foot">© 2026 SBC-NG · Este documento puede actualizarse sin previo aviso.</div>
+    </div>
+  </header>
+  <nav class="toc"><h2>Contenido</h2><a class="l2" href="#1-la-mirada-de-la-ma-ana">1. La mirada de la mañana</a><a class="l2" href="#2-la-topolog-a-en-vivo">2. La topología en vivo</a><a class="l2" href="#3-transcoding-en-vivo">3. Transcoding en vivo</a><a class="l2" href="#4-el-registro-de-llamadas-cdr">4. El registro de llamadas (CDR)</a><a class="l2" href="#5-diagn-stico-profundo-captura-sip">5. Diagnóstico profundo: captura SIP</a><a class="l2" href="#6-responder-a-un-ataque">6. Responder a un ataque</a><a class="l2" href="#7-reiniciar-un-motor">7. Reiniciar un motor</a><a class="l2" href="#8-alertas-por-correo-dej-que-el-borde-te-avise">8. Alertas por correo: dejá que el borde te avise</a><a class="l2" href="#9-rutina-recomendada">9. Rutina recomendada</a><a class="l2" href="#10-cu-ndo-escalar">10. Cuándo escalar</a></nav>
+  <main><p>El borde ya está configurado y pasando llamadas. Este manual es para el día a día: <strong>mirar que todo esté sano, diagnosticar cuando algo se tuerce, y responder a un ataque</strong>. Está pensado para un operador o un NOC, no para quien lo instaló.</p>
+<p>La regla de oro del SBC: si algo no anda, la respuesta casi siempre está en el panel antes que en un SSH. Aprender a leer estas cinco pantallas te ahorra el 90% de los sustos.</p>
+<hr />
+<div class="chapter"><span class="num">Capítulo 1</span><h2 id="1-la-mirada-de-la-ma-ana">La mirada de la mañana</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Monitor » Resumen</b></div>
+<p>Es la portada, y es un <strong>tablero de operaciones</strong> real, no un adorno. De un vistazo te dice si el borde está sano. Lo que vas a encontrar, de arriba hacia abajo:</p>
+<ul><li><strong>KPIs del momento:</strong> llamadas activas, internos registrados, llamadas transcodificando y IPs</li></ul>
+<p>  bloqueadas. Son los cuatro números que resumen "cómo viene el borde ahora mismo".</p>
+<ul><li><strong>Recursos del appliance:</strong> CPU, memoria y disco en anillos, con el valor real (carga, GB</li></ul>
+<p>  usados/totales) y el <em>uptime</em>. Si el disco se acerca al tope o la carga se dispara, se ve acá.</p>
+<ul><li><strong>Contenedores del stack:</strong> cada motor (kamailio, rtpengine, coturn, wsbridge, control-plane,</li></ul>
+<p>  base) con su <strong>estado</strong>, su <strong>CPU %</strong>, su <strong>memoria</strong> y su tiempo en marcha. Es el chequeo de   salud de cada pieza en una sola tabla.</p>
+<ul><li><strong>Interfaces de red:</strong> cada placa con su IP y su tráfico.</li><li><strong>Troncales:</strong> el estado en vivo de cada una (respuesta a OPTIONS).</li><li><strong>Internos registrados:</strong> quién está en línea, con su IP y su transporte.</li><li><strong>Últimas llamadas:</strong> las más recientes del CDR (de→a, resultado, duración, hora).</li></ul>
+<p>Si algo está en rojo o ámbar, empezá por acá: en el 90% de los casos, el tablero ya te dice qué pieza mirar antes de abrir cualquier otra pantalla.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ope-01-resumen.png" alt="Panel Resumen con KPIs, recursos, contenedores, interfaces, troncales y últimas llamadas" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 1</span>Panel Resumen con KPIs, recursos, contenedores, interfaces, troncales y últimas llamadas<span class="fn">ope-01-resumen.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 2</span><h2 id="2-la-topolog-a-en-vivo">La topología en vivo</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Monitor » Topología</b></div>
+<p>El mapa del borde: el SBC en el centro, las centrales enganchadas, las troncales hacia los operadores y el gateway. No es un dibujo estático — <strong>late con datos reales</strong>:</p>
+<ul><li>Cada central y cada troncal muestra un <strong>temporizador</strong> de hace cuánto respondió su</li></ul>
+<p>  último OPTIONS. Si el número deja de subir con normalidad, ese enlace se está muriendo.</p>
+<ul><li>Muestra la <strong>latencia</strong> medida (ida y vuelta del OPTIONS) y un <strong>MOS</strong> estimado (Mean</li></ul>
+<p>  Opinion Score): una nota de 1 a 5 de la calidad de audio esperable en ese enlace.</p>
+<ul><li>Las llamadas en curso se dibujan animadas sobre los enlaces por donde pasan.</li></ul>
+<p>Un MOS por encima de 4 es excelente; entre 3.5 y 4 es aceptable; por debajo de 3.5 el audio se va a notar, y conviene revisar la red hacia ese operador.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ope-02-topologia.png" alt="Topología con temporizadores de OPTIONS, latencia y MOS por enlace" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 2</span>Topología con temporizadores de OPTIONS, latencia y MOS por enlace<span class="fn">ope-02-topologia.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 3</span><h2 id="3-transcoding-en-vivo">Transcoding en vivo</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Monitor » Transcoding</b></div>
+<p>Cuando dos extremos de una llamada hablan códecs distintos, el SBC transcodifica en el medio. Esta pantalla lo muestra <strong>mientras pasa</strong>: el origen y el destino, los códecs de cada lado, y una animación del flujo de audio cuando efectivamente hay conversión. Un <em>badge</em> se enciende cuando hay transcoding activo.</p>
+<p>Sirve para dos cosas: confirmar que una llamada problemática está transcodificando (lo que consume CPU) y ver, en una integración nueva, qué códec terminó negociando cada lado.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ope-03-transcoding.png" alt="Pantalla de Transcoding mostrando origen, códecs y la animación del flujo" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 3</span>Pantalla de Transcoding mostrando origen, códecs y la animación del flujo<span class="fn">ope-03-transcoding.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 4</span><h2 id="4-el-registro-de-llamadas-cdr">El registro de llamadas (CDR)</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Monitor » CDR del borde</b></div>
+<p>El borde <strong>emite su propio CDR</strong> — no depende del de la central. Cada llamada que cruza el SBC queda registrada con origen, destino, hora, duración y resultado. Es la fuente de verdad para facturación, disputas y auditoría, porque registra lo que <em>realmente</em> pasó por el borde, no lo que la central <em>creyó</em> que pasó.</p>
+<p>Podés filtrar por fecha, número y estado, y exportar el resultado.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ope-04-cdr.png" alt="CDR del borde con columnas de origen, destino, duración y resultado" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 4</span>CDR del borde con columnas de origen, destino, duración y resultado<span class="fn">ope-04-cdr.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 5</span><h2 id="5-diagn-stico-profundo-captura-sip">Diagnóstico profundo: captura SIP</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Diagnóstico » Captura SIP</b></div>
+<p>Cuando una llamada falla y el CDR no alcanza, esta es la navaja suiza. El SBC tiene un <strong>sniffer SIP permanente</strong>: captura toda la señalización que entra y sale, y la guarda en un anillo. No hay que correr un tcpdump a mano ni llegar a tiempo — ya está grabado.</p>
+<ul><li>Buscá por número, IP, Call-ID o método.</li><li>Abrí un diálogo y velo como una <strong>escalera SIP</strong> (ladder): quién le mandó qué a quién,</li></ul>
+<p>  en orden, con los tiempos.</p>
+<ul><li>Si la llamada tuvo audio grabado, hay un <strong>reproductor</strong> en el mismo drawer.</li></ul>
+<p>Con esto reconstruís exactamente qué pasó: dónde se cortó, quién mandó el BYE, por qué el operador respondió 486.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ope-05-captura.png" alt="Captura SIP con el buscador y la escalera de un diálogo abierto" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 5</span>Captura SIP con el buscador y la escalera de un diálogo abierto<span class="fn">ope-05-captura.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 6</span><h2 id="6-responder-a-un-ataque">Responder a un ataque</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Diagnóstico » Intrusion Detection</b></div>
+<p>El SBC se defiende solo, pero como operador tenés que <strong>saber leer un ataque</strong> y actuar si hace falta.</p>
+<p>Qué vas a ver en el SOC durante un ataque típico:</p>
+<ul><li>Un pico de <strong>bloqueos</strong> con la bandera del país de origen.</li><li>En el <strong>timeline</strong>, eventos como <em>"drop escaneo PSTN"</em> o <em>"fuerza bruta de registro"</em> con</li></ul>
+<p>  la IP y el número que intentaba marcar.</p>
+<ul><li>El atacante suele <strong>falsificar el From</strong> (decir que es una extensión tuya) mientras</li></ul>
+<p>  intenta marcar a un número caro. Eso <strong>no</strong> significa que entró: el From es solo texto,   y el destino real (no tu extensión) es lo que el SBC frena.</p>
+<p>Qué podés hacer:</p>
+<ul><li><strong>Bloquear</strong> una IP a mano desde la lista, si querés adelantarte al automatismo.</li><li><strong>Desbloquear</strong> una IP si fue un falso positivo (un cliente legítimo que disparó el</li></ul>
+<p>  anti-flood).</p>
+<ul><li>Ajustar los umbrales si ves demasiados falsos positivos o demasiado ruido.</li></ul>
+<blockquote><p><strong>Cómo saber si un ataque logró algo:</strong> mirá el CDR. Si no hay una llamada <em>conectada</em></p><p>(con estado 200 y duración) hacia el destino del atacante, no pasó nada — el borde lo</p><p>frenó. Ver un INVITE en la captura <strong>no</strong> es una brecha: el paquete llega al cable</p><p>porque el 5060 está abierto para el tráfico legítimo, pero Kamailio lo mata en la puerta.</p></blockquote>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ope-06-soc-ataque.png" alt="SOC durante un ataque: bloqueos con banderas y timeline de eventos" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 6</span>SOC durante un ataque: bloqueos con banderas y timeline de eventos<span class="fn">ope-06-soc-ataque.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 7</span><h2 id="7-reiniciar-un-motor">Reiniciar un motor</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Diagnóstico » Motor SIP</b></div>
+<p>Si un motor quedó en mal estado, desde acá lo reiniciás sin entrar por SSH. Tené en cuenta que <strong>reiniciar Kamailio o rtpengine corta las llamadas en curso</strong> — no es una operación de hora pico. El panel te lo advierte antes de hacerlo.</p>
+<p>Después de un reinicio, volvé al <em>Resumen</em> y confirmá que el motor volvió a verde y que la topología muestra las centrales y troncales respondiendo OPTIONS de nuevo.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ope-07-motor.png" alt="Pantalla de Motor SIP con el estado y el botón de reinicio" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 7</span>Pantalla de Motor SIP con el estado y el botón de reinicio<span class="fn">ope-07-motor.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 8</span><h2 id="8-alertas-por-correo-dej-que-el-borde-te-avise">Alertas por correo: dejá que el borde te avise</h2></div>
+<p>No tenés que vivir mirando el panel. Con el SMTP configurado (ver <em>Configuración → Notificaciones por email</em>), el borde te escribe cuando algo pasa, con una plantilla clara y el logo de la app:</p>
+<div class="tw"><table><thead><tr><th>Evento</th><th>Cuándo llega</th></tr></thead><tbody><tr><td><strong>Ataque en curso</strong></td><td>Un pico de tráfico malicioso disparó las mitigaciones.</td></tr><tr><td><strong>IP bloqueada</strong></td><td>El anti-flood baneó una dirección.</td></tr><tr><td><strong>Motor caído / recuperado</strong></td><td>Un contenedor se cayó, y otro cuando vuelve.</td></tr><tr><td><strong>Troncal caída / recuperada</strong></td><td>Un operador dejó de responder OPTIONS, y cuando vuelve.</td></tr><tr><td><strong>Sospecha de fraude</strong></td><td>Un intento de marcar a un destino caro desde afuera.</td></tr><tr><td><strong>Resumen diario</strong></td><td>Un digest del borde: llamadas, bloqueos, estado.</td></tr></tbody></table></div>
+<p>Así, un motor que se cae a las 3 de la mañana te llega al mail en vez de esperar a que alguien mire el panel.</p>
+<hr />
+<div class="chapter"><span class="num">Capítulo 9</span><h2 id="9-rutina-recomendada">Rutina recomendada</h2></div>
+<p>Un borde bien cuidado casi no da trabajo, pero conviene una rutina liviana:</p>
+<ul><li><strong>Cada mañana (2 min):</strong> abrí el <em>Resumen</em>. Motores en verde, disco con margen, troncales</li></ul>
+<p>  respondiendo, internos registrados como esperás. Si todo está verde, listo.</p>
+<ul><li><strong>Semanal (10 min):</strong> pasá por el <em>SOC</em> (mirá si hubo ataques y cómo se contuvieron), revisá el</li></ul>
+<p>  <em>CDR</em> por llamadas raras, y confirmá que el MOS de tus enlaces sigue sano en la <em>Topología</em>.</p>
+<ul><li><strong>Ante un reclamo puntual:</strong> andá derecho a la <em>Captura SIP</em>, buscá la llamada por número o</li></ul>
+<p>  Call-ID, y leé la escalera. Ahí está qué pasó, sin adivinar.</p>
+<ul><li><strong>Después de cualquier cambio</strong> (troncal nueva, ruteo, extensión): verificá en el <em>Resumen</em> y la</li></ul>
+<p>  <em>Topología</em> que el enlace afectado quedó en verde.</p>
+<hr />
+<div class="chapter"><span class="num">Capítulo 10</span><h2 id="10-cu-ndo-escalar">Cuándo escalar</h2></div>
+<p>La mayoría de los problemas se ven y se resuelven en estas pantallas. Escalá al integrador si:</p>
+<ul><li>Un motor no vuelve a verde después de reiniciarlo.</li><li>La IP pública que muestra <em>Red</em> no es la correcta y no se corrige sola.</li><li>El MOS de un enlace está crónicamente bajo pese a que la red parece sana.</li><li>Ves llamadas <em>conectadas</em> hacia destinos que nadie reconoce (posible compromiso de una</li></ul>
+<p>  credencial de extensión — cambiala y revisá el CDR).</p>
+<p>Para todo lo demás, el borde está hecho para que lo operes vos, desde el panel, sin tocar una línea de configuración.</p></main>
+  <footer>SBC-NG · Manual de Operación · versión 0.2.0 · 16/07/2026</footer>
+</div>
+<button class="top" onclick="window.print()">Descargar PDF</button>
+<script>if(location.search.indexOf("print=1")>=0){window.addEventListener("load",function(){setTimeout(function(){window.print()},400)});}</script>
+</body></html>

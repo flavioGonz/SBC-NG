@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SBC-NG · Manual de Configuración</title>
+<style>:root{--accent:#7c3aed;--soft:#7c3aed14}
+*{box-sizing:border-box}
+body{margin:0;background:#eef1f6;color:#0f172a;font:16px/1.65 -apple-system,'Segoe UI',Roboto,Inter,Arial,sans-serif}
+.page{max-width:900px;margin:0 auto;background:#fff;box-shadow:0 4px 30px rgba(15,23,42,.07)}   /* ~A4 a 96dpi: 794px de contenido + márgenes */
+.cover{position:relative;min-height:940px;padding:0;background:#fff;color:#0f172a;display:flex;flex-direction:column}
+.cover .bar{height:14px;background:var(--accent)}
+.cover .side{position:absolute;left:0;top:14px;bottom:0;width:8px;background:linear-gradient(180deg,var(--accent),#0f1a30)}
+.cover .inner{padding:58px 64px 46px 74px;display:flex;flex-direction:column;flex:1}
+.cover .brandline{display:flex;align-items:center;gap:14px;border-bottom:1px solid #e8edf4;padding-bottom:18px}
+.cover .mark{width:46px;height:46px;border-radius:11px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px}
+.cover .brand{font-size:19px;font-weight:800;letter-spacing:-.2px}
+.cover .brandsub{font-size:12px;color:#94a3b8}
+.cover .mid{flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px 0}
+.cover .doctype{font-size:12px;font-weight:800;letter-spacing:2.6px;text-transform:uppercase;color:var(--accent)}
+.cover h1{font-size:52px;line-height:1.05;margin:16px 0 0;font-weight:800;letter-spacing:-1px;color:#0f172a}
+.cover .rule{width:96px;height:5px;background:var(--accent);border-radius:3px;margin:26px 0 22px}
+.cover .sub{font-size:19px;color:#475569;max-width:560px;line-height:1.5}
+.cover .metatable{border-top:1px solid #e8edf4;padding-top:22px;display:flex;gap:60px;flex-wrap:wrap}
+.cover .metatable div span{display:block;font-size:10.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#94a3b8;margin-bottom:5px}
+.cover .metatable div b{font-size:14.5px;font-weight:600;color:#334155}
+.cover .foot{margin-top:26px;font-size:11px;color:#94a3b8}
+.cover .wm{position:absolute;right:-40px;top:120px;opacity:.06;transform:rotate(-8deg);pointer-events:none}
+.toc{padding:34px 60px;border-bottom:1px solid #e8edf4;background:#f8fafc}
+.toc h2{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:#94a3b8;margin:0 0 14px}
+.toc a{display:block;color:#334155;text-decoration:none;padding:4px 0;font-size:14.5px;border-left:2px solid transparent;padding-left:12px}
+.toc a:hover{color:var(--accent);border-left-color:var(--accent)}
+.toc a.l3{padding-left:30px;font-size:13.5px;color:#64748b}
+main{padding:44px 64px 70px}
+h1{font-size:30px;margin:0 0 22px}
+h2{font-size:24px;margin:0 0 6px;padding:0;color:#0f172a;letter-spacing:-.3px;scroll-margin-top:20px}
+.chapter{margin:52px 0 20px;padding-top:22px;border-top:3px solid var(--accent)}
+.chapter:first-of-type{margin-top:0;border-top:none;padding-top:0}
+.chapter .num{display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent);margin-bottom:7px}
+h3{font-size:17px;margin:30px 0 10px;color:#1e293b;padding-left:12px;border-left:3px solid #e2e8f0;scroll-margin-top:20px}
+h4{font-size:14.5px;margin:20px 0 8px;color:#475569;font-weight:700}
+p{margin:12px 0}
+code{background:#f1f5f9;padding:2px 6px;border-radius:5px;font:13.5px/1.5 ui-monospace,Consolas,monospace;color:#be123c}
+pre{background:#0f1a30;color:#e2e8f0;padding:16px 18px;border-radius:11px;overflow:auto;margin:16px 0}
+pre code{background:none;color:inherit;padding:0;font-size:13.5px}
+blockquote{margin:18px 0;padding:14px 18px;background:var(--soft);border-left:4px solid var(--accent);border-radius:0 10px 10px 0}
+blockquote p{margin:5px 0;font-size:14.5px;color:#334155}
+.tw{overflow-x:auto;margin:18px 0}
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+th{text-align:left;background:#f8fafc;color:#475569;font-weight:700;font-size:12.5px;letter-spacing:.4px;text-transform:uppercase;padding:11px 13px;border-bottom:2px solid #e8edf4}
+td{padding:11px 13px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+tr:last-child td{border-bottom:none}
+ul,ol{margin:12px 0;padding-left:24px}
+li{margin:6px 0}
+hr{border:none;border-top:1px solid #e8edf4;margin:38px 0}
+.nav{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin:14px 0 18px;padding:11px 15px;background:var(--soft);border:1px solid var(--accent);border-left-width:4px;border-radius:9px;font-size:14px;color:#334155}
+.nav .navk{font-size:10px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:var(--accent);padding-right:4px}
+.nav b{font-weight:700;color:#0f172a}
+.nav .sep{color:#94a3b8;font-weight:400}
+/* Lamina: la imagen es lo primero y ocupa la hoja; el titulo va DEBAJO, como pie de figura. */
+figure.shot{margin:34px 0 30px;text-align:center;break-inside:avoid}
+figure.shot .frame{background:linear-gradient(160deg,#f8fafc,#eef2f7);border:1px solid #e2e8f0;border-radius:14px;padding:14px}
+figure.shot img{display:block;max-width:100%;margin:0 auto;border-radius:9px;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(15,23,42,.13)}
+figure.shot figcaption{margin-top:14px;font-size:14px;color:#334155;font-weight:600;line-height:1.4}
+figure.shot .fig{display:block;font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+figure.shot .fn{display:block;font:11px ui-monospace,Consolas,monospace;color:#cbd5e1;margin-top:5px;font-weight:400}
+figure.shot.ph .frame{border:2px dashed #cbd5e1;background:#f8fafc;padding:56px 20px}
+figure.shot.ph .frame::before{content:'Imagen pendiente';display:block;font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#94a3b8}
+figure.shot.ph .fn{color:var(--accent);font-weight:700;margin-top:6px}
+footer{padding:26px 60px 40px;color:#94a3b8;font-size:12.5px;border-top:1px solid #eef1f7}
+.top{position:fixed;right:22px;bottom:22px;background:var(--accent);color:#fff;border:0;border-radius:11px;padding:11px 16px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(15,23,42,.2)}
+@media print{
+  body{background:#fff}
+  .page{box-shadow:none;max-width:none}
+  .top{display:none}
+  .cover{padding:60px 40px;page-break-after:always}
+  .toc{page-break-after:always}
+  main{padding:0 10px}
+  .chapter{page-break-before:always;page-break-after:avoid;border-top:3px solid var(--accent)}
+  .chapter:first-of-type{page-break-before:avoid}
+  h2,h3{page-break-after:avoid}
+  @page{size:A4;margin:18mm 16mm 20mm}
+  @page{@bottom-right{content:"Pagina " counter(page) " / " counter(pages);font-size:9px;color:#94a3b8}}
+  @page:first{margin:0}
+  @page:first{@bottom-right{content:""}}
+  /* La imagen siempre empieza arriba de la hoja: se lleva su titulo consigo y nada la parte. */
+  figure.shot{break-inside:avoid;margin:20px 0 24px}
+  figure.shot .frame{padding:10px}
+  figure.shot img{max-height:118mm}
+  table,pre,blockquote{page-break-inside:avoid}
+  p,li{orphans:3;widows:3}
+  h4{page-break-after:avoid}
+  a{color:inherit;text-decoration:none}
+}
+</style></head>
+<body>
+<div class="page">
+  <header class="cover">
+      <div class="wm"><svg width="280" height="280" viewBox="0 0 64 64" fill="none" style="opacity:1.0" xmlns="http://www.w3.org/2000/svg" aria-label="SBC-NG"><path d="M32 4.5 L56 13.5 V31 c0 14.4 -9.9 25.5 -24 28.5 C17.9 56.5 8 45.4 8 31 V13.5 Z" fill="none" stroke="#7c3aed" stroke-width="3.4" stroke-linejoin="round"/><path d="M20 20 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 a3.5 3.5 0 0 1 -3.5 3.5 h-6 l-5 5 v-5 h-2 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 A3.5 3.5 0 0 1 20 20 Z" fill="none" stroke="#7c3aed" stroke-width="3" stroke-linejoin="round"/><path d="M31 27.5 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 A3.5 3.5 0 0 1 44 43.5 h-2 v5 l-5 -5 h-6 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 a3.5 3.5 0 0 1 3.5 -3.5 Z" fill="none" stroke="#7c3aed" stroke-width="3" stroke-linejoin="round" opacity="0.65"/></svg></div>
+    <div class="bar"></div><div class="side"></div>
+    <div class="inner">
+      <div class="brandline">
+        <div class="mark"><svg width="30" height="30" viewBox="0 0 64 64" fill="none" style="opacity:1.0" xmlns="http://www.w3.org/2000/svg" aria-label="SBC-NG"><path d="M32 4.5 L56 13.5 V31 c0 14.4 -9.9 25.5 -24 28.5 C17.9 56.5 8 45.4 8 31 V13.5 Z" fill="none" stroke="#fff" stroke-width="3.4" stroke-linejoin="round"/><path d="M20 20 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 a3.5 3.5 0 0 1 -3.5 3.5 h-6 l-5 5 v-5 h-2 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 A3.5 3.5 0 0 1 20 20 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M31 27.5 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 A3.5 3.5 0 0 1 44 43.5 h-2 v5 l-5 -5 h-6 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 a3.5 3.5 0 0 1 3.5 -3.5 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round" opacity="0.65"/></svg></div>
+        <div>
+          <div class="brand">SBC-NG</div>
+          <div class="brandsub">Session Border Controller · el borde de tu telefonía</div>
+        </div>
+      </div>
+      <div class="mid">
+        <div class="doctype">Documentación oficial</div>
+        <h1>Manual de Configuración</h1>
+        <div class="rule"></div>
+        <div class="sub">Attach, troncales, ruteo y seguridad</div>
+      </div>
+      <div class="metatable">
+        <div><span>Dirigido a</span><b>Administrador</b></div>
+        <div><span>Versión del producto</span><b>0.2.0</b></div>
+        <div><span>Actualizado</span><b>16/07/2026</b></div>
+        <div><span>Documento</span><b>CONFIGURACION</b></div>
+      </div>
+      <div class="foot">© 2026 SBC-NG · Este documento puede actualizarse sin previo aviso.</div>
+    </div>
+  </header>
+  <nav class="toc"><h2>Contenido</h2><a class="l2" href="#1-enganchar-una-central-attach">1. Enganchar una central (attach)</a><a class="l2" href="#2-troncales-hacia-los-operadores">2. Troncales hacia los operadores</a><a class="l3" href="#2-1-troncal-por-ip-peering">2.1. Troncal por IP (peering)</a><a class="l3" href="#2-2-troncal-con-registro-usuario-clave">2.2. Troncal con registro (usuario/clave)</a><a class="l3" href="#2-3-troncal-webrtc-cliente-interconexi-n-de-sedes">2.3. Troncal WebRTC-cliente (interconexión de sedes)</a><a class="l3" href="#2-4-diagn-stico-de-una-troncal">2.4 Diagnóstico de una troncal</a><a class="l2" href="#3-ruteo-de-salida">3. Ruteo de salida</a><a class="l3" href="#3-1-el-asistente-de-ruteo-paso-a-paso">3.1 El asistente de ruteo (paso a paso)</a><a class="l3" href="#3-2-tope-de-llamadas-por-troncal-cac">3.2 Tope de llamadas por troncal (CAC)</a><a class="l2" href="#4-extensiones-sip-remotas">4. Extensiones SIP remotas</a><a class="l2" href="#5-manipulaci-n-de-cabeceras-sip">5. Manipulación de cabeceras SIP</a><a class="l2" href="#6-medios-rtpengine-turn-y-stun">6. Medios: rtpengine, TURN y STUN</a><a class="l2" href="#7-seguridad-y-detecci-n-de-intrusiones-ids-soc">7. Seguridad y detección de intrusiones (IDS/SOC)</a><a class="l3" href="#7-1-stir-shaken-verificaci-n-de-identidad-del-llamante">7.1 STIR/SHAKEN (verificación de identidad del llamante)</a><a class="l2" href="#8-red-lan-wan-e-ip-p-blica">8. Red: LAN, WAN e IP pública</a><a class="l2" href="#9-notificaciones-por-email">9. Notificaciones por email</a><a class="l2" href="#10-orden-recomendado-de-puesta-a-punto">10. Orden recomendado de puesta a punto</a></nav>
+  <main><p>Este manual asume que el borde ya está instalado y accedés al panel (ver <em>Manual de Instalación</em>). Acá vas a <strong>enganchar tus centrales</strong>, <strong>dar de alta troncales</strong>, <strong>armar el ruteo</strong> y <strong>ajustar la defensa</strong>. El orden importa: cada sección se apoya en la anterior.</p>
+<p>Una idea que conviene tener clara desde el principio: en el SBC <strong>todo se configura desde el panel</strong>. No se toca un archivo, no se edita un <code>.env</code>, no se entra por SSH a cambiar una IP. Si algo no se puede hacer desde el panel, es un bug, no una limitación de diseño.</p>
+<hr />
+<div class="chapter"><span class="num">Capítulo 1</span><h2 id="1-enganchar-una-central-attach">Enganchar una central (attach)</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Señalización y Medios » Centrales (attach)</b></div>
+<p>Una <em>central</em> es la PBX que el SBC protege. El SBC puede estar delante de una o de varias a la vez (una PBX-NG y un 3CX conviviendo, por ejemplo). Enganchar una central es decirle al borde: <em>"este equipo interno es de confianza, mandale las llamadas entrantes y aceptá las salientes que venga de él"</em>.</p>
+<p>Para agregar una central:</p>
+<ol><li>Tocá <strong>Nueva central</strong>.</li><li><strong>Nombre:</strong> cómo la vas a reconocer (ej. <code>PBX-Central</code>).</li><li><strong>SIP URI:</strong> la IP interna y puerto de la central (ej. <code>sip:192.168.10.5:5060</code>).</li><li><strong>Contexto entrante:</strong> el contexto de dialplan al que entran las llamadas (por defecto</li></ol>
+<p>   <code>from-trunk</code>).</p>
+<ol><li><strong>Prioridad:</strong> si hay varias centrales, cuál es la primaria.</li></ol>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/cfg-01-central-alta.png" alt="Formulario de alta de una central con SIP URI y prioridad" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 1</span>Formulario de alta de una central con SIP URI y prioridad<span class="fn">cfg-01-central-alta.png</span></figcaption></figure>
+<p>Apenas la guardás, el SBC empieza a <strong>vigilarla con OPTIONS</strong>: le manda un ping SIP cada pocos segundos y mide si responde y en cuánto. Ese estado lo ves en la topología con un temporizador de <em>"hace cuánto respondió"</em> y su latencia (ver <em>Manual de Operación</em>).</p>
+<blockquote><p><strong>Qué hace esto por debajo:</strong> el SBC agrega la IP de la central a su lista de *fuentes</p><p>confiables<em> (para aceptar las llamadas salientes que origine) y a su </em>dispatcher* (para</p><p>saber a quién entregarle las entrantes y monitorearla). Todo automático.</p></blockquote>
+<hr />
+<div class="chapter"><span class="num">Capítulo 2</span><h2 id="2-troncales-hacia-los-operadores">Troncales hacia los operadores</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Señalización y Medios » Troncales</b></div>
+<p>Una <em>troncal</em> es el camino hacia el mundo: el operador de telefonía (VoIP provider), otro SBC, o una sede remota. El SBC-NG maneja tres tipos, y el alta cambia según cuál elijas.</p>
+<h3 id="2-1-troncal-por-ip-peering">2.1. Troncal por IP (peering)</h3>
+<p>El operador te reconoce por tu IP pública, sin usuario ni clave. Es el caso de un enlace punto a punto o un troncal SIP corporativo.</p>
+<ul><li><strong>Modo:</strong> <code>IP</code></li><li><strong>Host del proveedor:</strong> IP o dominio del operador (ej. <code>200.40.30.9</code>).</li><li><strong>Transporte:</strong> UDP, TCP o TLS.</li></ul>
+<h3 id="2-2-troncal-con-registro-usuario-clave">2.2. Troncal con registro (usuario/clave)</h3>
+<p>El operador te da un usuario y una contraseña, y el SBC se <strong>registra</strong> contra él como si fuera un teléfono. Es lo típico de un DID residencial o de PYME.</p>
+<ul><li><strong>Modo:</strong> <code>registro</code></li><li><strong>Host, usuario, contraseña</strong> los da el operador.</li></ul>
+<p>El SBC mantiene el registro vivo y lo muestra en verde cuando está <em>Registrada</em>. Si la clave está mal, ahora <strong>no entra en loop</strong>: reintenta con backoff creciente y te marca el error en el estado, en vez de martillar al operador (esto se endureció en la última versión).</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/cfg-02-troncal-modo.png" alt="Alta de troncal, con el selector de modo IP / registro / WebRTC" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 2</span>Alta de troncal, con el selector de modo IP / registro / WebRTC<span class="fn">cfg-02-troncal-modo.png</span></figcaption></figure>
+<h3 id="2-3-troncal-webrtc-cliente-interconexi-n-de-sedes">2.3. Troncal WebRTC-cliente (interconexión de sedes)</h3>
+<p>Este es el troncal <em>marca de la casa</em>: conecta dos sedes por <strong>WebSocket seguro (WSS)</strong> en vez de SIP tradicional, atravesando cualquier NAT sin abrir puertos en la sede remota. Lo usa, por ejemplo, para unir dos SBC-NG de dos oficinas.</p>
+<ul><li><strong>Modo:</strong> <code>WebRTC-cliente</code></li><li><strong>URL remota:</strong> el WSS del otro extremo (ej. <code>wss://sbc-sede-b.miempresa.com/ws</code>).</li><li><strong>Usuario y clave</strong> del enlace.</li></ul>
+<p>El SBC levanta el <strong>wsbridge</strong>: se conecta al WSS remoto, se registra, y hace de B2BUA entre ese enlace y tu Kamailio local, con el audio anclado en rtpengine. En la topología aparece un nodo WSS dibujado hacia su destino.</p>
+<blockquote><p><strong>¿Cliente o servidor?</strong> El extremo que <em>inicia</em> la conexión es el <strong>cliente</strong> (usa este</p><p>modo). El extremo que <em>recibe</em> es el <strong>servidor</strong>: no configura una troncal saliente,</p><p>sino que publica su <code>/ws</code> en el proxy (ver <em>Instalación → sección 6</em>) y da de alta al</p><p>otro como una <strong>extensión SIP</strong> con clave. Para un enlace entre dos sedes, elegí una como</p><p>servidor y la otra como cliente.</p></blockquote>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/cfg-03-troncal-webrtc.png" alt="Topología mostrando el troncal WebRTC dibujado entre dos sedes" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 3</span>Topología mostrando el troncal WebRTC dibujado entre dos sedes<span class="fn">cfg-03-troncal-webrtc.png</span></figcaption></figure>
+<h3 id="2-4-diagn-stico-de-una-troncal">2.4 Diagnóstico de una troncal</h3>
+<p>Al editar una troncal, el panel corre un <strong>diagnóstico en vivo</strong> que ocupa todo el sector derecho del formulario, con un radar animado mientras prueba. No es un simple <em>ping</em>: encadena varias comprobaciones y las interpreta.</p>
+<ul><li><strong>Alcance SIP (OPTIONS):</strong> manda un OPTIONS y mide si el operador responde y en cuánto.</li><li><strong>Fallback TCP + ping:</strong> si el operador <strong>filtra OPTIONS</strong> (típico de un Grandstream UCM o</li></ul>
+<p>  algunos operadores que sólo aceptan tráfico de llamada real), el SBC prueba <strong>TCP al puerto SIP</strong>   y un <strong>ping</strong> antes de dar nada por muerto. Por eso un UCM sano se muestra en <strong>ámbar   informativo</strong>, no en rojo de alarma: "no contesta OPTIONS" no es lo mismo que "está caído".</p>
+<ul><li><strong>NAT / SIP ALG:</strong> si detecta que la IP del operador queda <strong>detrás de un gateway</strong> o que hay un</li></ul>
+<p>  <strong>SIP ALG</strong> del router reescribiendo puertos, nombres o direcciones en la señalización, te lo   avisa con la guía para desactivar el SIP ALG (es una de las causas más comunes de audio roto y   registros que se caen solos).</p>
+<blockquote><p>El SIP ALG del router de tu proveedor de Internet es el enemigo silencioso del VoIP: "ayuda"</p><p>reescribiendo paquetes SIP y termina rompiéndolos. Si el diagnóstico lo marca, desactivalo en el</p><p>router. El SBC ya hace bien ese trabajo; no necesita ayuda.</p></blockquote>
+<hr />
+<div class="chapter"><span class="num">Capítulo 3</span><h2 id="3-ruteo-de-salida">Ruteo de salida</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Señalización y Medios » Ruteo de salida</b></div>
+<p>Las troncales son los caminos; el ruteo decide <strong>cuál</strong> se usa según el número marcado. Es una tabla de patrones con prioridad y failover.</p>
+<ol><li>Tocá <strong>Nueva ruta</strong>.</li><li><strong>Patrón:</strong> una expresión que matchea el número (ej. <code>^09[0-9]{7}$</code> para celulares</li></ol>
+<p>   uruguayos, <code>^0</code> para todo lo que empiece con 0).</p>
+<ol><li><strong>Troncal:</strong> a qué troncal mandarla.</li><li><strong>Quitar / anteponer:</strong> dígitos a sacar del principio o prefijo a agregar</li></ol>
+<p>   (normalización de numeración).</p>
+<ol><li><strong>Prioridad:</strong> si dos rutas matchean, gana la de menor prioridad; la otra queda de</li></ol>
+<p>   <em>failover</em> si la primera no contesta.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/cfg-04-ruteo.png" alt="Tabla de ruteo de salida con patrones y troncales" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 4</span>Tabla de ruteo de salida con patrones y troncales<span class="fn">cfg-04-ruteo.png</span></figcaption></figure>
+<p>El SBC prueba las troncales en orden hasta que una conteste. Si un operador está caído, el INVITE salta al siguiente automáticamente — y con un <strong>tope de saltos</strong> para que una troncal inalcanzable nunca haga crecer el mensaje ni cuelgue la llamada (endurecido en la última versión).</p>
+<h3 id="3-1-el-asistente-de-ruteo-paso-a-paso">3.1 El asistente de ruteo (paso a paso)</h3>
+<p>Para no equivocarte con las expresiones, <strong>Nueva ruta</strong> es un asistente. Primero elegís <strong>cómo</strong> querés rutear, con ejemplos, y recién después cargás los datos:</p>
+<ul><li><strong>Atrapa-todo:</strong> todo lo que se marque sale por una troncal. El caso más simple.</li><li><strong>Por prefijo:</strong> según con qué empieza el número (ej. todo lo que empieza con <code>0</code> → operador</li></ul>
+<p>  nacional; <code>00</code> → internacional → otra troncal).</p>
+<ul><li><strong>Código puntual:</strong> un número o código exacto va a un destino fijo (ej. marcar <code>1</code> → mesa de</li></ul>
+<p>  ayuda).</p>
+<p>El asistente muestra un <strong>diagrama animado</strong> del flujo ("al marcar <em>X</em> → SBC → troncal") para que veas el camino antes de guardar. Debajo, la normalización (quitar/anteponer dígitos) se explica con el ejemplo en vivo del número que escribís.</p>
+<h3 id="3-2-tope-de-llamadas-por-troncal-cac">3.2 Tope de llamadas por troncal (CAC)</h3>
+<p>Cada troncal puede tener un <strong>máximo de llamadas simultáneas</strong> (<em>Call Admission Control</em>). Sirve para dos cosas: <strong>respetar lo que te vende el operador</strong> (si tu plan son 10 canales, no tiene sentido intentar 15) y <strong>contener el fraude</strong> (si una credencial se filtra, el tope pone un techo al daño).</p>
+<ul><li>En la troncal, poné <strong>Máx. llamadas</strong>. <code>0</code> o vacío = sin límite.</li><li>Cuando la troncal llega al tope, la siguiente llamada recibe un <strong>503 (ocupado)</strong> y, si hay una</li></ul>
+<p>  ruta de <em>failover</em>, salta a la troncal alternativa.</p>
+<ul><li>El conteo lo lleva el borde en tiempo real; no depende de que el operador te avise.</li></ul>
+<blockquote><p>El CAC trabaja junto con el failover del ruteo: "esta troncal está llena → probá la siguiente".</p><p>Bien combinados, ninguna llamada se pierde por un tope mientras haya una salida libre.</p></blockquote>
+<hr />
+<div class="chapter"><span class="num">Capítulo 4</span><h2 id="4-extensiones-sip-remotas">Extensiones SIP remotas</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Señalización y Medios » Extensiones SIP</b></div>
+<p>Un teléfono o softphone que está <strong>fuera de la red</strong> (un empleado en su casa, un celular) puede registrarse a través del SBC en vez de exponer la central. El SBC recibe el REGISTER, lo valida contra la central, y de ahí en más hace de intermediario: el teléfono solo conoce al SBC, nunca a la PBX.</p>
+<p>Cada extensión remota lleva <strong>usuario y clave propios</strong>. La numeración se asigna de forma <strong>correlativa y segura</strong> desde el panel — no hay que pensar el próximo número, el SBC lo propone.</p>
+<blockquote><p><strong>Seguridad:</strong> registrarse exige la clave. Un atacante que adivine el número de</p><p>extensión no logra nada sin la contraseña: el SBC lo desafía con <em>digest auth</em> y, si</p><p>falla, lo cuenta como intento sospechoso (ver sección 7).</p></blockquote>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/cfg-05-extensiones.png" alt="Lista de extensiones SIP remotas con su estado de registro" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 5</span>Lista de extensiones SIP remotas con su estado de registro<span class="fn">cfg-05-extensiones.png</span></figcaption></figure>
+<blockquote><p><strong>Para el usuario remoto:</strong> el teléfono que registra esta extensión desde una PC con Windows es el</p><p><strong>PBX-NG Softphone</strong>. Cómo instalarlo, configurarlo (WebRTC contra el <code>/ws</code> del borde o SIP</p><p>nativo), y resolver problemas está en el <em>Manual de la App de Escritorio (Windows)</em>.</p></blockquote>
+<hr />
+<div class="chapter"><span class="num">Capítulo 5</span><h2 id="5-manipulaci-n-de-cabeceras-sip">Manipulación de cabeceras SIP</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Señalización y Medios » Manipulación SIP</b></div>
+<p>A veces un operador es quisquilloso: quiere el CallerID en un formato, rechaza un <code>User-Agent</code>, exige un prefijo. En vez de tocar la central, se arregla en el borde. Esta pantalla te deja escribir reglas de reescritura que el SBC aplica a la señalización que sale (o entra), sin recompilar nada.</p>
+<p>Las reglas se guardan en la base y el control-plane las traduce a la configuración de Kamailio automáticamente. Si no hay reglas, el mensaje pasa tal cual.</p>
+<p>Casos típicos que se resuelven acá sin tocar la central:</p>
+<div class="tw"><table><thead><tr><th>Lo que exige el operador</th><th>Qué hace la regla</th></tr></thead><tbody><tr><td>Un CallerID en formato E.164 (<code>+598…</code>)</td><td>Reescribe el <code>From</code> anteponiendo el prefijo del país.</td></tr><tr><td>Rechaza tu <code>User-Agent</code></td><td>Reemplaza el <code>User-Agent</code> por uno neutro que el operador acepte.</td></tr><tr><td>Quiere un dominio propio en el <code>From</code></td><td>Cambia el host del <code>From</code> por el que te asignó el operador.</td></tr><tr><td>Manda un <code>P-Asserted-Identity</code> que tu central no entiende</td><td>Lo elimina o lo traduce al <code>From</code>.</td></tr></tbody></table></div>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/cfg-06-manipulacion.png" alt="Editor de reglas de manipulación SIP" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 6</span>Editor de reglas de manipulación SIP<span class="fn">cfg-06-manipulacion.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 6</span><h2 id="6-medios-rtpengine-turn-y-stun">Medios: rtpengine, TURN y STUN</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Señalización y Medios » Medios · TURN/STUN</b></div>
+<p>El SBC no solo mueve la señalización: <strong>ancla el audio</strong>. Todo el RTP pasa por rtpengine, que resuelve el NAT de medios (el problema clásico de <em>"la llamada conecta pero no hay audio"</em>) y, cuando hace falta, <strong>transcodifica</strong> entre códecs distintos (G.729 ↔ Opus ↔ G.711).</p>
+<p>Desde esta pantalla configurás el rango de puertos de medios y el comportamiento del transcoding. El servidor <strong>TURN/STUN (coturn)</strong> es el que permite que los softphones WebRTC detrás de NAT tengan audio: se configura acá con su clave compartida.</p>
+<p>Para verificar que el TURN realmente funciona (no solo que el puerto está abierto), el repositorio trae <code>scripts/check-turn.py</code>, que hace un <em>Allocate</em> real contra el servidor.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/cfg-07-medios.png" alt="Panel de medios con rango RTP y configuración de TURN" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 7</span>Panel de medios con rango RTP y configuración de TURN<span class="fn">cfg-07-medios.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 7</span><h2 id="7-seguridad-y-detecci-n-de-intrusiones-ids-soc">Seguridad y detección de intrusiones (IDS/SOC)</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Diagnóstico » Intrusion Detection</b></div>
+<p>Esta es la pantalla que justifica tener un SBC. Todo lo que golpea el 5060 desde internet —escáneres, fuerza bruta de registro, intentos de fraude a números caros— pasa por acá, y el SBC lo frena en el borde. La pantalla es un <strong>panel tipo SOC</strong>: banderas por país, bloqueos activos, ataques en curso, mitigaciones y un historial.</p>
+<p>Tres capas de defensa trabajan solas desde el primer arranque:</p>
+<ul><li><strong>pike + ipban:</strong> quien manda demasiados mensajes en poco tiempo (una avalancha) queda</li></ul>
+<p>  bloqueado por un rato. A una IP ya bloqueada, el SBC ni le contesta.</p>
+<ul><li><strong>secfilter:</strong> tira de una los escáneres conocidos por su <em>User-Agent</em> (sipvicious,</li></ul>
+<p>  friendly-scanner) y las IPs de tu lista negra.</p>
+<ul><li><strong>detectores de fraude:</strong> un INVITE de afuera que intenta marcar a la PSTN o a un número</li></ul>
+<p>  larguísimo (typical toll-fraud) se descarta y la IP se banea.</p>
+<p>En la pestaña <strong>Ajustes</strong> definís los umbrales: cuántos mensajes tolera una IP, en qué ventana, y por cuánto tiempo la bloqueás. En <strong>Listas</strong> administrás las listas negra y blanca a mano.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/cfg-08-soc.png" alt="Panel SOC con banderas de país, bloqueos y timeline de ataques" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 8</span>Panel SOC con banderas de país, bloqueos y timeline de ataques<span class="fn">cfg-08-soc.png</span></figcaption></figure>
+<blockquote><p><strong>Importante:</strong> los umbrales de fábrica ya protegen. No hace falta tocar nada para estar</p><p>defendido; los ajustes son para afinar, no para activar.</p></blockquote>
+<h3 id="7-1-stir-shaken-verificaci-n-de-identidad-del-llamante">7.1 STIR/SHAKEN (verificación de identidad del llamante)</h3>
+<p>El SBC trae soporte de <strong>STIR/SHAKEN</strong>: el estándar que firma criptográficamente el CallerID para combatir el <em>spoofing</em> (llamadas que mienten sobre quién llama). Cuando está activo, el borde <strong>verifica la cabecera <code>Identity</code></strong> de los INVITE entrantes y puede <strong>firmar</strong> los salientes con tu clave y certificado.</p>
+<blockquote><p><strong>Estado de fábrica: desactivado.</strong> STIR/SHAKEN se dejó <strong>apagado a propósito</strong>. Su compatibilidad</p><p>depende del operador —muchos en la región todavía no lo implementan— y activarlo sin que el otro</p><p>extremo lo soporte no aporta nada. Queda ahí, listo para el día que tu operador lo pida, y se</p><p>enciende desde el panel sin tocar código. Si no sabés si lo necesitás, no lo necesitás: dejalo como</p><p>está.</p></blockquote>
+<hr />
+<div class="chapter"><span class="num">Capítulo 8</span><h2 id="8-red-lan-wan-e-ip-p-blica">Red: LAN, WAN e IP pública</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Infraestructura » Red (LAN/WAN)</b></div>
+<p>El SBC muestra sus placas de red reales con un conector RJ45 animado que indica si el enlace está arriba. Debajo del diagrama de modo ves las interfaces con su IP, máscara y tráfico.</p>
+<p>La <strong>IP pública</strong> es clave para que Kamailio anuncie la dirección correcta en las cabeceras (Via, Record-Route) y el audio no se pierda. Se resuelve de tres maneras, y el SBC elige la que configuraste en la instalación:</p>
+<ul><li><strong>IP fija:</strong> la ponés y listo.</li><li><strong>Dominio (DDNS):</strong> el SBC lo resuelve y <strong>re-resuelve</strong> si la IP cambia, regenerando</li></ul>
+<p>  coturn y rtpengine solo.</p>
+<ul><li><strong>Autodescubrimiento por STUN:</strong> si no sabés tu IP pública, el SBC se la pregunta a un</li></ul>
+<p>  servidor STUN y la vigila; si cambia, se reconfigura.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/cfg-09-red.png" alt="Pantalla de Red con las interfaces LAN/WAN y el RJ45 animado" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 9</span>Pantalla de Red con las interfaces LAN/WAN y el RJ45 animado<span class="fn">cfg-09-red.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 9</span><h2 id="9-notificaciones-por-email">Notificaciones por email</h2></div>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Infraestructura » Ajustes · Email</b></div>
+<p>Para que el borde te avise (un motor caído, un ataque, un troncal que se desregistró), configurá el SMTP: servidor, puerto, usuario, clave y remitente. La contraseña se guarda cifrada y nunca se devuelve al panel. Hay un botón de <strong>prueba</strong> que manda un mail de verificación.</p>
+<figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/cfg-10-email.png" alt="Configuración SMTP para notificaciones" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 10</span>Configuración SMTP para notificaciones<span class="fn">cfg-10-email.png</span></figcaption></figure>
+<hr />
+<div class="chapter"><span class="num">Capítulo 10</span><h2 id="10-orden-recomendado-de-puesta-a-punto">Orden recomendado de puesta a punto</h2></div>
+<p>Si es tu primera vez, seguí esta secuencia y vas a tener un borde funcional sin volver atrás:</p>
+<ol><li><strong>Red</strong> — confirmá que la IP pública es la correcta.</li><li><strong>Centrales</strong> — enganchá tu PBX y verificá que la ves en verde.</li><li><strong>Troncales</strong> — dá de alta el operador y esperá que registre / responda OPTIONS.</li><li><strong>Ruteo</strong> — armá al menos una ruta de salida.</li><li><strong>Extensiones</strong> — si tenés usuarios remotos, creá sus registros.</li><li><strong>Seguridad</strong> — revisá el SOC, ajustá umbrales si hace falta.</li><li><strong>Email</strong> — dejá las notificaciones andando.</li></ol>
+<p>Con eso el borde está en producción. El día a día —mirar, diagnosticar, responder a un incidente— es el <strong>Manual de Operación</strong>.</p></main>
+  <footer>SBC-NG · Manual de Configuración · versión 0.2.0 · 16/07/2026</footer>
+</div>
+<button class="top" onclick="window.print()">Descargar PDF</button>
+<script>if(location.search.indexOf("print=1")>=0){window.addEventListener("load",function(){setTimeout(function(){window.print()},400)});}</script>
+</body></html>

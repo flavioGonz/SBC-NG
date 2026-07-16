@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libswresample-dev libavfilter-dev libevent-dev libpcap-dev libxmlrpc-core-c3-dev \
       libhiredis-dev libjson-glib-dev libcurl4-openssl-dev libmosquitto-dev \
       libwebsockets-dev libspandsp-dev libopus-dev libmnl-dev libnftnl-dev \
-      default-libmysqlclient-dev ca-certificates \
+      default-libmysqlclient-dev libncurses-dev libjwt-dev libpcre2-dev libsystemd-dev liburing-dev libcjson-dev ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # G.729 (bcg729): el códec que piden los operadores viejos y que WebRTC no habla.
@@ -28,7 +28,7 @@ RUN git clone --depth 1 https://github.com/BelledonneCommunications/bcg729.git /
     && cd /src/bcg729 && cmake -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_SHARED=YES . \
     && make -j"$(nproc)" && make install && ldconfig
 
-ARG RTPENGINE_VERSION=mr11.5.1.24
+ARG RTPENGINE_VERSION=mr13.5.1.19
 # Dos cosas que no son obvias y cuestan una tarde cada una:
 #
 #  1. Se compila SIN la opción de iptables. Debian 12 ya no trae `libiptc` (la
@@ -54,7 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libavfilter8 libevent-2.1-7 libevent-pthreads-2.1-7 libevent-core-2.1-7 \
       libpcap0.8 libxmlrpc-core-c3 libhiredis0.14 \
       libjson-glib-1.0-0 libcurl4 libmosquitto1 libwebsockets17 libspandsp2 libopus0 \
-      libmnl0 libnftnl11 libmariadb3 iproute2 ca-certificates \
+      libmnl0 libnftnl11 libmariadb3 libjwt0 libpcre2-8-0 liburing2 libcjson1 libncursesw6 iproute2 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /src/rtpengine/daemon/rtpengine /usr/local/bin/rtpengine

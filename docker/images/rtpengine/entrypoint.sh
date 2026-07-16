@@ -9,6 +9,11 @@
 # ============================================================================
 set -e
 
+# El panel escribe acá lo que el usuario configuró (rango de puertos, timeouts,
+# transcoding). Si el archivo no existe todavía, valen los valores por defecto:
+# el motor tiene que levantar igual, con o sin panel.
+[ -f /etc/sbcng/rtpengine.env ] && . /etc/sbcng/rtpengine.env
+
 : "${PORT_MIN:=30000}"
 : "${PORT_MAX:=40000}"
 : "${TIMEOUT:=60}"

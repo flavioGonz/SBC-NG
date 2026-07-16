@@ -1,0 +1,10 @@
+{
+  "product": "SBC-NG",
+  "tagline": "Session Border Controller · el borde de tu telefonía",
+  "manuals": [
+    { "id": "instalacion",  "title": "Manual de Instalación",  "subtitle": "Puesta en marcha del appliance de borde", "audience": "Técnico / integrador", "icon": "🚀", "accent": "#2563eb" },
+    { "id": "configuracion","title": "Manual de Configuración","subtitle": "Attach, troncales, ruteo y seguridad",   "audience": "Administrador",        "icon": "⚙️", "accent": "#7c3aed" },
+    { "id": "operacion",    "title": "Manual de Operación",    "subtitle": "Monitoreo, diagnóstico y respuesta",      "audience": "Operador / NOC",       "icon": "🛡️", "accent": "#0d9488" },
+    { "id": "escritorio",   "title": "App de Escritorio (Windows)", "subtitle": "Softphone: interno remoto a través del borde", "audience": "Usuario remoto / Admin", "icon": "🖥️", "accent": "#f59e0b" }
+  ]
+}

@@ -17,7 +17,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-sbcng}
       POSTGRES_USER: ${DB_USER:-sbcng}
-      POSTGRES_PASSWORD: ${DB_PASS:?falta DB_PASS en el .env}
+      POSTGRES_PASSWORD: ${DB_PASS}
     volumes:
       - sbc_db:/var/lib/postgresql/data
     ports:
@@ -42,8 +42,18 @@ services:
     # vería su propio veth, que no le sirve a nadie. Además así alcanza a
     # Kamailio y a rtpengine por loopback.
     network_mode: host
+    # NET_ADMIN: el panel define el modo de red (router o switch). Sin esto no puede
+    # crear el puente, prender el ip_forward ni poner la regla de NAT.
+    cap_add: [NET_ADMIN, NET_RAW]
+    volumes:
+      # Los motores leen su config UNA vez al arrancar: aplicar = reiniciarlos.
+      # El codigo solo puede tocar los contenedores del propio SBC (lista blanca).
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sbc_conf:/etc/sbcng
     environment:
       PORT: 3100
+      CONF_DIR: /etc/sbcng
+      COMPOSE_PROJECT: sbcng
       DB_HOST: 127.0.0.1
       DB_NAME: ${DB_NAME:-sbcng}
       DB_USER: ${DB_USER:-sbcng}
@@ -54,6 +64,24 @@ services:
       PUBLIC_IP: ${PUBLIC_IP}
       DOMAIN: ${DOMAIN}
 
+  dashboard:
+    build:
+      context: ..
+      dockerfile: dashboard/Dockerfile
+    image: sbcng/dashboard:${VERSION:-0.1.0}
+    restart: unless-stopped
+    depends_on: [control-plane]
+    # Modo host para llegar al control-plane por loopback (:3100) sin exponerlo:
+    # el navegador nunca habla con la API directo, siempre pasa por /backend del panel.
+    network_mode: host
+    environment:
+      PORT: 3001
+      # El server standalone de Next escucha en $HOSTNAME. En network_mode host eso
+      # hereda el hostname del contenedor (sbcNG-lab), que no resuelve: muere con
+      # ENOTFOUND antes de escuchar. Hay que atarlo explicitamente.
+      HOSTNAME: 0.0.0.0
+      API_URL: http://127.0.0.1:3100
+
   kamailio:
     build:
       context: .
@@ -61,6 +89,8 @@ services:
     image: sbcng/kamailio:${VERSION:-0.1.0}
     restart: unless-stopped
     network_mode: host
+    volumes:
+      - sbc_conf:/etc/sbcng:ro
     depends_on:
       postgres: { condition: service_healthy }
     environment:
@@ -71,6 +101,28 @@ services:
       PUBLIC_IP: ${PUBLIC_IP}
       TRUSTED_NET: ${TRUSTED_NET:-}
 
+  # Puente WebRTC-cliente (SIP-over-WSS -> Kamailio). Solo actua si hay troncales
+  # mode='webrtc-client'. network_mode host para hablar con Kamailio (127.0.0.1:5060) y
+  # rtpengine (127.0.0.1:2223) sin NAT de docker.
+  wsbridge:
+    build:
+      context: images/wsbridge
+    image: sbcng/wsbridge:${VERSION:-0.1.0}
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DB_HOST: 127.0.0.1
+      DB_NAME: ${DB_NAME:-sbcng}
+      DB_USER: ${DB_USER:-sbcng}
+      DB_PASS: ${DB_PASS}
+      KAM_HOST: 127.0.0.1
+      KAM_PORT: 5060
+      RTPE_HOST: 127.0.0.1
+      RTPE_PORT: 2223
+      LOCAL_SIP_PORT: 5090
+
   rtpengine:
     build:
       context: .
@@ -78,6 +130,8 @@ services:
     image: sbcng/rtpengine:${VERSION:-0.1.0}
     restart: unless-stopped
     network_mode: host
+    volumes:
+      - sbc_conf:/etc/sbcng:ro
     environment:
       PUBLIC_IP: ${PUBLIC_IP}
       PORT_MIN: ${RTP_PORT_MIN:-30000}
@@ -90,15 +144,19 @@ services:
     image: sbcng/coturn:${VERSION:-0.1.0}
     restart: unless-stopped
     network_mode: host
+    volumes:
+      - sbc_conf:/etc/sbcng:ro
     environment:
       PUBLIC_IP: ${PUBLIC_IP}
       DOMAIN: ${DOMAIN}
       TURN_REALM: ${DOMAIN}
       TURN_USER: ${TURN_USER:-sbcng}
-      TURN_PASS: ${TURN_PASS:?falta TURN_PASS en el .env}
+      TURN_PASS: ${TURN_PASS:-}
       TURN_PORT_MIN: ${TURN_PORT_MIN:-49152}
       TURN_PORT_MAX: ${TURN_PORT_MAX:-65535}
     profiles: ["turn"]
 
 volumes:
   sbc_db:
+  # Config generada por el panel (rtpengine.env, coturn.env, reglas.cfg, seguridad.cfg).
+  sbc_conf:
