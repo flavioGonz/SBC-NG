@@ -39,6 +39,13 @@ temporizador de *"hace cuánto respondió"* y su latencia (ver *Manual de Operac
 > confiables* (para aceptar las llamadas salientes que origine) y a su *dispatcher* (para
 > saber a quién entregarle las entrantes y monitorearla). Todo automático.
 
+| Campo | Qué es | Ejemplo | Nota |
+|---|---|---|---|
+| **Nombre** | Etiqueta de la central | `PBX-Central` | Sólo para reconocerla |
+| **SIP URI** | IP interna + puerto de la PBX | `sip:192.168.10.5:5060` | Debe ser alcanzable desde el SBC |
+| **Contexto entrante** | Dialplan al que entran las llamadas | `from-trunk` | Dejá el default salvo que tu PBX use otro |
+| **Prioridad** | Orden si hay varias centrales | `1` (primaria) | La menor gana; el resto queda de respaldo |
+
 ---
 
 ## 2. Troncales hacia los operadores
@@ -115,6 +122,23 @@ comprobaciones y las interpreta.
 > reescribiendo paquetes SIP y termina rompiéndolos. Si el diagnóstico lo marca, desactivalo en el
 > router. El SBC ya hace bien ese trabajo; no necesita ayuda.
 
+### 2.5 Referencia de campos de la troncal
+
+| Campo | Qué es | Valores / ejemplo | Cuándo tocarlo |
+|---|---|---|---|
+| **Nombre** | Etiqueta interna de la troncal | `operador-antel`, `enlace-sedeB` | Siempre; es sólo para reconocerla |
+| **Modo** | Tipo de troncal | `IP` · `registro` · `WebRTC-cliente` | Según cómo te reconoce el otro extremo |
+| **Host del proveedor** | IP o dominio del operador/destino | `200.40.30.9`, `sip.operador.com` | Modos IP y registro |
+| **Puerto** | Puerto SIP del destino | `5060` (UDP/TCP), `5061` (TLS) | Si el operador usa un puerto no estándar |
+| **Transporte** | Protocolo de señalización | `UDP` · `TCP` · `TLS` | TLS si el operador lo exige o querés cifrar |
+| **Usuario / Clave** | Credenciales de registro | las da el operador | Sólo modo `registro` |
+| **URL remota (WSS)** | WebSocket seguro del otro SBC | `wss://sbc-b.empresa.com/ws` | Sólo modo `WebRTC-cliente` |
+| **Máx. llamadas (CAC)** | Tope de llamadas simultáneas | `0` = sin límite; `10` = 10 canales | Para respetar el plan del operador y contener fraude |
+| **Gateway / detrás de NAT** | IP del gateway si el operador está detrás de uno | IP del gateway | Lo sugiere el diagnóstico si lo detecta |
+
+> **Regla práctica:** empezá con `Modo IP` o `registro` según lo que te dio el operador, dejá el
+> resto por defecto, guardá, y mirá el diagnóstico. Ajustá sólo lo que el diagnóstico marque.
+
 ---
 
 ## 3. Ruteo de salida
@@ -134,6 +158,14 @@ una tabla de patrones con prioridad y failover.
    *failover* si la primera no contesta.
 
 ![Tabla de ruteo de salida con patrones y troncales](img/cfg-04-ruteo.png)
+
+| Campo | Qué es | Ejemplo |
+|---|---|---|
+| **Patrón** | Expresión que matchea el número marcado | `^09[0-9]{7}$` (celular UY) · `^0` (todo lo que empieza con 0) |
+| **Troncal** | A qué troncal se manda si matchea | `operador-antel` |
+| **Quitar** | Dígitos a sacar del principio | `1` (saca el 0 de acceso) |
+| **Anteponer** | Prefijo a agregar | `598` (E.164) |
+| **Prioridad** | Orden ante varios matches | menor gana; el resto es failover |
 
 El SBC prueba las troncales en orden hasta que una conteste. Si un operador está caído, el
 INVITE salta al siguiente automáticamente — y con un **tope de saltos** para que una
@@ -195,6 +227,57 @@ propone.
 > **PBX-NG Softphone**. Cómo instalarlo, configurarlo (WebRTC contra el `/ws` del borde o SIP
 > nativo), y resolver problemas está en el *Manual de la App de Escritorio (Windows)*.
 
+### 4.1 Dos modelos de registro: proxy vs. registrar del borde
+
+Hay **dos formas** en que un teléfono remoto llega a través del SBC, y son excluyentes por instalación:
+
+| | **Proxy de registro** (por defecto) | **Registrar del borde** (opcional) |
+|---|---|---|
+| Quién autentica | La central (PBX) | El **SBC** (digest local) |
+| Dónde viven las credenciales | En la central | En el SBC (tabla `subscriber`) |
+| Qué ve la central | Todos los REGISTER | Nada: el SBC los termina |
+| Cuándo conviene | Caso normal, la central manda | Descargar la PBX, sobrevivir a que se caiga, o no exponerla |
+| Dónde se administra | Extensiones SIP (sección 4) | **Registros → Registrar del borde** |
+
+En **proxy** (lo que está activo de fábrica) el SBC recibe el REGISTER, le arregla el NAT y se lo
+pasa a la central; si contesta 200, la extensión queda arriba. La lista de *Registros* muestra lo
+que el borde **vio pasar**.
+
+### 4.2 Registrar del borde (terminar el REGISTER en el SBC)
+
+» Monitoreo » Registros » Registrar del borde
+
+Cuando activás el **registrar del borde**, los teléfonos registran **contra el SBC**, que los
+autentica por *digest* contra credenciales locales — la central deja de ver esos REGISTER. Es un
+cambio de modelo, por eso viene apagado y se enciende con intención.
+
+**Para ponerlo en marcha:**
+
+1. En **Registros → Registrar del borde**, prendé el switch y fijá el **Realm** (el dominio de
+   autenticación, ej. `sbc.tuempresa.com`). El realm entra en el cálculo del digest: si lo cambiás
+   después, las claves ya creadas dejan de validar.
+2. Tocá **Aplicar al motor**. El SBC regenera la config, la **valida** y recarga con *rollback*
+   automático (si algo no levanta, vuelve solo a la config anterior).
+3. Creá una **cuenta SIP** por teléfono: usuario + clave. La clave se guarda como `ha1` (nunca en
+   claro).
+4. En cada teléfono, apuntá el SIP **al SBC** (no a la central) con ese usuario, clave y realm.
+
+| Campo | Qué es | Ejemplo |
+|---|---|---|
+| **Switch ON/OFF** | Activa el registrar del borde | ON |
+| **Realm** | Dominio de autenticación (digest) | `sbc.tuempresa.com` |
+| **Usuario** | Nombre de la cuenta SIP | `1010` |
+| **Clave** | Contraseña (se guarda como ha1) | mínimo 4 caracteres |
+| **Descripción** | Nota libre | `Softphone recepción` |
+
+> **Todo o nada.** Con el registrar activo, **todo** REGISTER que llega al SBC se termina ahí. Los
+> teléfonos deben usar las credenciales del SBC, no las de la central. Si algunos necesitan seguir
+> registrando contra la PBX, dejá el registrar **apagado** y usá el modo proxy.
+
+> **Medios cifrados:** si el softphone ofrece audio SRTP (`RTP/SAVP` + `a=crypto`), el SBC hace el
+> puente a RTP plano hacia la central automáticamente (interworking SRTP↔RTP en rtpengine). No hay
+> nada que configurar; ver sección 6.
+
 ---
 
 ## 5. Manipulación de cabeceras SIP
@@ -240,6 +323,24 @@ repositorio trae `scripts/check-turn.py`, que hace un *Allocate* real contra el 
 
 ![Panel de medios con rango RTP y configuración de TURN](img/cfg-07-medios.png)
 
+**Interworking de cifrado (SRTP ↔ RTP).** rtpengine traduce entre medios cifrados y en claro sin que
+tengas que configurar nada:
+
+| Escenario | Qué hace el SBC |
+|---|---|
+| Teléfono ofrece **SDES-SRTP** (`RTP/SAVP` + `a=crypto`) por UDP | Termina el SRTP y ofrece **RTP/AVP** a la central; re-cifra hacia el teléfono |
+| Softphone **WebRTC** (WS/WSS, `RTP/SAVPF` + DTLS) | Quita ICE y desencripta DTLS-SRTP; entrega RTP plano a la central |
+| Oferta ya en **RTP/AVP** | No toca nada (no-op) |
+
+> Sin este puente, una central que sólo habla RTP plano (Asterisk sin SRTP en ese endpoint) rechaza
+> el audio cifrado con un **488 Not Acceptable Here**. El SBC lo resuelve en el borde.
+
+| Campo | Qué es | Valor típico |
+|---|---|---|
+| **Rango de puertos RTP** | Puertos UDP para el audio anclado | `30000-40000` |
+| **TURN: clave compartida** | Secreto del coturn para WebRTC | generado en la instalación |
+| **Transcoding** | Traducir entre códecs (G.729↔Opus↔G.711) | automático según oferta |
+
 ---
 
 ## 7. Seguridad y detección de intrusiones (IDS/SOC)
@@ -268,6 +369,35 @@ blanca a mano.
 
 > **Importante:** los umbrales de fábrica ya protegen. No hace falta tocar nada para estar
 > defendido; los ajustes son para afinar, no para activar.
+
+**Indicador "bajo ataque".** Cuando el ritmo de eventos de seguridad del último minuto pasa el
+umbral, el panel muestra un **banner rojo pulsante** arriba de todo, con los eventos/min, cuántas
+IPs y la que más golpea. Es informativo: las mitigaciones (anti-flood + ipban) ya están actuando
+solas; el banner sólo te avisa que está pasando ahora.
+
+**Motivo de cada bloqueo.** En *Bloqueos activos*, la columna **Motivo** muestra con un ícono y un
+tooltip por qué cayó cada IP: flood, escáner, auth fallida, fraude o **país no permitido**. Cada
+fila tiene además un botón para **banear** esa IP (o el país entero) desde el propio SOC.
+
+### 7.2 Filtro por país (GeoIP)
+
+» Seguridad » Filtro por país
+
+Con el módulo **geoip2** activo, el borde decide qué países pueden hablar SIP con él, **antes** de
+tocar la central. Hay dos modos:
+
+| Modo | Qué hace | Cuándo usarlo |
+|---|---|---|
+| **Lista negra** | Rechaza (403) el SIP de los países de la lista; la IP cae en la lista negra con su bandera | Bloquear focos de ataque puntuales (ej. países desde donde te escanean) |
+| **Lista blanca** | Sólo entra el SIP de los países de la lista; **todo el resto se rechaza** | Cuando tu telefonía es de un país o dos y todo lo demás sobra |
+
+Pasos: activá **geoip2** en *Motor SIP → Módulos*, elegí el modo, agregá los países (con su bandera)
+y tocá **Guardar y aplicar**. En lista blanca, los países que geoip no puede ubicar se **dejan
+pasar** a propósito, para no bloquear a alguien por error (el resto de defensas igual actúa sobre
+ellos).
+
+> **Ojo con la lista blanca:** si te olvidás de incluir tu propio país, te podés dejar afuera a vos
+> mismo. Agregá primero el país de tus centrales y operadores, aplicá, y recién después endurecé.
 
 ### 7.1 STIR/SHAKEN (verificación de identidad del llamante)
 

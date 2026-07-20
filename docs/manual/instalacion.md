@@ -202,16 +202,40 @@ handshake `wss://sbc.miempresa.com/ws` devuelve 404 en vez de **101 Switching Pr
 
 ## 7. Puertos y NAT
 
-Si el SBC está detrás de un router/firewall, redirigí estos puertos desde la IP pública
-hacia la IP del SBC:
+Si el SBC está detrás de un router/firewall, redirigí los puertos desde la IP pública
+hacia la IP del SBC. **Qué puertos abrir depende del modo TLS**, que se elige en el panel
+(*Certificados → Modo TLS del borde*).
+
+**Siempre — en cualquier modo:**
 
 | Puerto        | Protocolo | Para qué                                  |
 |---------------|-----------|-------------------------------------------|
-| 5060          | UDP y TCP | Señalización SIP                          |
-| 8088          | TCP       | WebSocket SIP (softphones WebRTC)         |
+| 5060          | UDP y TCP | Señalización SIP (en claro)               |
 | 3478          | UDP y TCP | STUN/TURN (coturn)                        |
 | 49152–65535   | UDP       | Medios RTP (rtpengine) — rango amplio     |
 | 30000–40000   | UDP       | Relay TURN (coturn)                       |
+
+**Modo «Detrás de un proxy» (por defecto):** el proxy inverso (NGINX/NPM) publica el
+HTTPS/WSS y le reenvía `ws` en claro al SBC. Los puertos TLS los abre el proxy, no el
+SBC. Del lado del SBC alcanza con que el 8088 sea accesible **desde el proxy** (red
+interna), no desde internet:
+
+| Puerto | Protocolo | Para qué                                              |
+|--------|-----------|-------------------------------------------------------|
+| 8088   | TCP       | WebSocket SIP (el proxy termina TLS y reenvía `ws`)   |
+
+**Modo «TLS nativo» (sin proxy):** el SBC hace su propio TLS con el certificado de
+Let's Encrypt (o uno autofirmado). Abrí, **además de los de «siempre»**:
+
+| Puerto | Protocolo | Para qué                                              |
+|--------|-----------|-------------------------------------------------------|
+| 5061   | TCP       | SIP sobre TLS (SIPS) — operadores/teléfonos seguros   |
+| 8443   | TCP       | WSS — WebSocket SIP seguro (WebRTC sin proxy)         |
+
+> **Regla rápida:** abrí **5061 y/o 8443 sólo si activaste «TLS nativo»** y necesitás
+> conexiones **entrantes** desde internet. Si el SBC se registra **saliente** contra el
+> operador, no hace falta abrir SIP entrante. Si usás el proxy, no toques 5061/8443:
+> el cifrado hacia afuera ya lo hace el proxy.
 
 El detalle completo, con el porqué de cada uno y las notas de *hairpin NAT*, está en
 `docs/FIREWALL.md` del repositorio.

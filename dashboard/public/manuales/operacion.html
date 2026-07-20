@@ -111,14 +111,14 @@ footer{padding:26px 60px 40px;color:#94a3b8;font-size:12.5px;border-top:1px soli
       </div>
       <div class="metatable">
         <div><span>Dirigido a</span><b>Operador / NOC</b></div>
-        <div><span>Versión del producto</span><b>0.2.0</b></div>
-        <div><span>Actualizado</span><b>16/07/2026</b></div>
+        <div><span>Versión del producto</span><b>0.3.0</b></div>
+        <div><span>Actualizado</span><b>20/07/2026</b></div>
         <div><span>Documento</span><b>OPERACION</b></div>
       </div>
       <div class="foot">© 2026 SBC-NG · Este documento puede actualizarse sin previo aviso.</div>
     </div>
   </header>
-  <nav class="toc"><h2>Contenido</h2><a class="l2" href="#1-la-mirada-de-la-ma-ana">1. La mirada de la mañana</a><a class="l2" href="#2-la-topolog-a-en-vivo">2. La topología en vivo</a><a class="l2" href="#3-transcoding-en-vivo">3. Transcoding en vivo</a><a class="l2" href="#4-el-registro-de-llamadas-cdr">4. El registro de llamadas (CDR)</a><a class="l2" href="#5-diagn-stico-profundo-captura-sip">5. Diagnóstico profundo: captura SIP</a><a class="l2" href="#6-responder-a-un-ataque">6. Responder a un ataque</a><a class="l2" href="#7-reiniciar-un-motor">7. Reiniciar un motor</a><a class="l2" href="#8-alertas-por-correo-dej-que-el-borde-te-avise">8. Alertas por correo: dejá que el borde te avise</a><a class="l2" href="#9-rutina-recomendada">9. Rutina recomendada</a><a class="l2" href="#10-cu-ndo-escalar">10. Cuándo escalar</a></nav>
+  <nav class="toc"><h2>Contenido</h2><a class="l2" href="#1-la-mirada-de-la-ma-ana">1. La mirada de la mañana</a><a class="l2" href="#2-la-topolog-a-en-vivo">2. La topología en vivo</a><a class="l2" href="#3-transcoding-en-vivo">3. Transcoding en vivo</a><a class="l2" href="#4-el-registro-de-llamadas-cdr">4. El registro de llamadas (CDR)</a><a class="l3" href="#4-1-los-c-digos-que-m-s-vas-a-ver">4.1 Los códigos que más vas a ver</a><a class="l2" href="#5-diagn-stico-profundo-captura-sip">5. Diagnóstico profundo: captura SIP</a><a class="l3" href="#5-1-caso-real-la-llamada-conecta-y-corta-con-488">5.1 Caso real: "la llamada conecta y corta con 488"</a><a class="l2" href="#6-responder-a-un-ataque">6. Responder a un ataque</a><a class="l3" href="#6-1-cerrar-el-pa-s-lista-negra-o-lista-blanca">6.1 Cerrar el país: lista negra o lista blanca</a><a class="l2" href="#7-reiniciar-un-motor">7. Reiniciar un motor</a><a class="l2" href="#8-alertas-por-correo-dej-que-el-borde-te-avise">8. Alertas por correo: dejá que el borde te avise</a><a class="l2" href="#9-rutina-recomendada">9. Rutina recomendada</a><a class="l2" href="#10-cu-ndo-escalar">10. Cuándo escalar</a></nav>
   <main><p>El borde ya está configurado y pasando llamadas. Este manual es para el día a día: <strong>mirar que todo esté sano, diagnosticar cuando algo se tuerce, y responder a un ataque</strong>. Está pensado para un operador o un NOC, no para quien lo instaló.</p>
 <p>La regla de oro del SBC: si algo no anda, la respuesta casi siempre está en el panel antes que en un SSH. Aprender a leer estas cinco pantallas te ahorra el 90% de los sustos.</p>
 <hr />
@@ -155,7 +155,17 @@ footer{padding:26px 60px 40px;color:#94a3b8;font-size:12.5px;border-top:1px soli
 <div class="chapter"><span class="num">Capítulo 4</span><h2 id="4-el-registro-de-llamadas-cdr">El registro de llamadas (CDR)</h2></div>
 <div class="nav"><span class="navk">Cómo llegar</span><b>Monitor » CDR del borde</b></div>
 <p>El borde <strong>emite su propio CDR</strong> — no depende del de la central. Cada llamada que cruza el SBC queda registrada con origen, destino, hora, duración y resultado. Es la fuente de verdad para facturación, disputas y auditoría, porque registra lo que <em>realmente</em> pasó por el borde, no lo que la central <em>creyó</em> que pasó.</p>
-<p>Podés filtrar por fecha, número y estado, y exportar el resultado.</p>
+<p><strong>Qué te dice cada fila, además de lo obvio:</strong></p>
+<ul><li><strong>De dónde vino</strong>: la bandera del país de la IP origen y el ISP. Las llamadas que vienen de</li></ul>
+<p>  tu red interna o de la central se marcan con un ícono de servidor en vez de bandera.</p>
+<ul><li><strong>Si esa IP está bloqueada</strong> ahora mismo en el borde: la fila se pinta en rojo suave y lleva</li></ul>
+<p>  un distintivo. Sirve para responder rápido <em>"¿este atacante llegó a cursar algo?"</em>.</p>
+<ul><li><strong>Qué significa el resultado</strong>: pasá el mouse por el estado y el panel te explica el código</li></ul>
+<p>  SIP en criollo. No hace falta saberse la RFC de memoria.</p>
+<p><strong>Los filtros</strong> son por período (hoy, 7 días, 30 días, todo, o un rango a medida) y por estado (todas, atendidas, no atendidas, o <strong>sólo las que vienen de una IP bloqueada</strong>). Arriba se ve el <strong>ASR</strong> — qué porcentaje de los intentos terminó atendido — que es el número que primero mira cualquiera que audite tráfico.</p>
+<blockquote><p><strong>Sobre el ASR.</strong> Un ASR muy bajo casi siempre significa una de tres cosas: números mal</p><p>normalizados en el ruteo, una troncal con problemas, o alguien escaneando. El CDR filtrado por</p><p><em>no atendidas</em> te dice cuál de las tres es en menos de un minuto.</p></blockquote>
+<h3 id="4-1-los-c-digos-que-m-s-vas-a-ver">4.1 Los códigos que más vas a ver</h3>
+<div class="tw"><table><thead><tr><th>Código</th><th>Qué pasó realmente</th><th>Por dónde empezar</th></tr></thead><tbody><tr><td><strong>200</strong></td><td>Atendida</td><td>—</td></tr><tr><td><strong>404</strong></td><td>El destino no existe donde llegó la llamada</td><td>El número marcado o el ruteo: ¿la central tiene esa extensión?</td></tr><tr><td><strong>403</strong></td><td>Rechazada por política</td><td>IP no permitida, país bloqueado, o credenciales sin permiso</td></tr><tr><td><strong>408</strong></td><td>Nadie respondió la señalización</td><td>El destino está caído o inalcanzable</td></tr><tr><td><strong>486</strong></td><td>Ocupado</td><td>El destino estaba en otra llamada</td></tr><tr><td><strong>487</strong></td><td>Cancelada antes de atender</td><td>Colgaron, o hubo failover a otra troncal</td></tr><tr><td><strong>488</strong></td><td><strong>No hubo medios en común</strong></td><td>Códecs o cifrado incompatibles — ver la sección 5.1</td></tr><tr><td><strong>503</strong></td><td>Sin capacidad</td><td>Troncal llena (CAC) u operador caído</td></tr></tbody></table></div>
 <figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ope-04-cdr.png" alt="CDR del borde con columnas de origen, destino, duración y resultado" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 4</span>CDR del borde con columnas de origen, destino, duración y resultado<span class="fn">ope-04-cdr.png</span></figcaption></figure>
 <hr />
 <div class="chapter"><span class="num">Capítulo 5</span><h2 id="5-diagn-stico-profundo-captura-sip">Diagnóstico profundo: captura SIP</h2></div>
@@ -166,19 +176,49 @@ footer{padding:26px 60px 40px;color:#94a3b8;font-size:12.5px;border-top:1px soli
 <ul><li>Si la llamada tuvo audio grabado, hay un <strong>reproductor</strong> en el mismo drawer.</li></ul>
 <p>Con esto reconstruís exactamente qué pasó: dónde se cortó, quién mandó el BYE, por qué el operador respondió 486.</p>
 <figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ope-05-captura.png" alt="Captura SIP con el buscador y la escalera de un diálogo abierto" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 5</span>Captura SIP con el buscador y la escalera de un diálogo abierto<span class="fn">ope-05-captura.png</span></figcaption></figure>
+<h3 id="5-1-caso-real-la-llamada-conecta-y-corta-con-488">5.1 Caso real: "la llamada conecta y corta con 488"</h3>
+<p>Vale la pena contarlo entero porque es el tipo de problema que más tiempo hace perder, y el método sirve para cualquier otro.</p>
+<p><strong>El síntoma.</strong> Un interno marca, y la llamada muere enseguida con <strong>488 Not Acceptable Here</strong>. No es que no encuentre el destino (eso sería 404) ni que esté ocupado (486): el otro lado dice <em>"no puedo con los medios que me ofrecés"</em>.</p>
+<p><strong>Cómo se diagnostica.</strong> El CDR te da el código, pero no el porqué; eso está en el <strong>SDP</strong> (la parte del mensaje que describe el audio). Buscá el INVITE en la captura SIP y abrilo: en el cuerpo vas a ver algo así:</p>
+<pre><code>m=audio 44796 RTP/SAVP 0 8 101
+a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:AXm7rYMwiEuf8qQ...
+a=rtpmap:0 PCMU/8000</code></pre>
+<p>Las dos líneas que importan: <strong><code>RTP/SAVP</code></strong> y <strong><code>a=crypto</code></strong> significan que ese teléfono está ofreciendo <strong>audio cifrado (SRTP)</strong>. Si del otro lado hay una central que sólo habla RTP en claro, no hay acuerdo posible y contesta 488.</p>
+<p><strong>Qué hace el SBC.</strong> Justamente esto es lo que resuelve un borde: rtpengine <strong>termina</strong> el cifrado del lado del teléfono y le ofrece RTP plano a la central, traduciendo en el medio. No hay nada que configurar — pero si ves 488 con <code>a=crypto</code> en el SDP, ya sabés que el problema es de <strong>cifrado de medios</strong>, no de códecs ni de ruteo.</p>
+<p><strong>El método, en general.</strong> Ante cualquier fallo de medios:</p>
+<ol><li>Mirá el <strong>código</strong> en el CDR (te dice la familia del problema).</li><li>Abrí el <strong>INVITE</strong> en la captura y leé el <code>m=audio</code>: el perfil (<code>RTP/AVP</code> en claro,</li></ol>
+<p>   <code>RTP/SAVP</code> cifrado, <code>RTP/SAVPF</code> WebRTC) y los códecs ofrecidos.</p>
+<ol><li>Compará con lo que el otro extremo respondió. La incompatibilidad casi siempre salta a la</li></ol>
+<p>   vista en esas dos líneas.</p>
 <hr />
 <div class="chapter"><span class="num">Capítulo 6</span><h2 id="6-responder-a-un-ataque">Responder a un ataque</h2></div>
 <div class="nav"><span class="navk">Cómo llegar</span><b>Diagnóstico » Intrusion Detection</b></div>
 <p>El SBC se defiende solo, pero como operador tenés que <strong>saber leer un ataque</strong> y actuar si hace falta.</p>
 <p>Qué vas a ver en el SOC durante un ataque típico:</p>
-<ul><li>Un pico de <strong>bloqueos</strong> con la bandera del país de origen.</li><li>En el <strong>timeline</strong>, eventos como <em>"drop escaneo PSTN"</em> o <em>"fuerza bruta de registro"</em> con</li></ul>
+<ul><li>El aviso <strong>BAJO ATAQUE</strong> arriba de todo: aparece solo cuando el ritmo de eventos del último</li></ul>
+<p>  minuto pasa el umbral, y muestra cuántos eventos por minuto, desde cuántas IPs, y cuál es la   que más golpea. Es informativo — las defensas ya están actuando solas.</p>
+<ul><li>Un pico de <strong>bloqueos</strong> con la bandera del país de origen, y en la columna <strong>Motivo</strong> el ícono</li></ul>
+<p>  de qué lo frenó: flood, escáner, auth fallida, fraude o país no permitido.</p>
+<ul><li>En el <strong>mapa de ataques</strong>, un punto pulsante por país de origen (pasá el mouse para ver cuál).</li><li>En el <strong>timeline</strong>, eventos como <em>"drop escaneo PSTN"</em> o <em>"fuerza bruta de registro"</em> con</li></ul>
 <p>  la IP y el número que intentaba marcar.</p>
 <ul><li>El atacante suele <strong>falsificar el From</strong> (decir que es una extensión tuya) mientras</li></ul>
 <p>  intenta marcar a un número caro. Eso <strong>no</strong> significa que entró: el From es solo texto,   y el destino real (no tu extensión) es lo que el SBC frena.</p>
 <p>Qué podés hacer:</p>
-<ul><li><strong>Bloquear</strong> una IP a mano desde la lista, si querés adelantarte al automatismo.</li><li><strong>Desbloquear</strong> una IP si fue un falso positivo (un cliente legítimo que disparó el</li></ul>
+<ul><li><strong>Bloquear</strong> una IP a mano desde la lista, si querés adelantarte al automatismo. También podés</li></ul>
+<p>  <strong>bloquear el país entero</strong> desde la misma fila, si el ataque viene todo del mismo lado.</p>
+<ul><li><strong>Desbloquear</strong> una IP si fue un falso positivo (un cliente legítimo que disparó el</li></ul>
 <p>  anti-flood).</p>
 <ul><li>Ajustar los umbrales si ves demasiados falsos positivos o demasiado ruido.</li></ul>
+<h3 id="6-1-cerrar-el-pa-s-lista-negra-o-lista-blanca">6.1 Cerrar el país: lista negra o lista blanca</h3>
+<div class="nav"><span class="navk">Cómo llegar</span><b>Seguridad » Filtro por país</b></div>
+<p>Cuando el ruido viene concentrado geográficamente, esta es la medida más efectiva. Hay dos formas y la elección importa:</p>
+<ul><li><strong>Lista negra</strong> — bloqueás los países que te molestan. Es lo indicado para cortar un foco</li></ul>
+<p>  puntual sin tocar nada más.</p>
+<ul><li><strong>Lista blanca</strong> — sólo entran los países que listás y <strong>todo el resto se rechaza</strong>. Es mucho</li></ul>
+<p>  más fuerte, y es lo correcto cuando tu telefonía es de uno o dos países y el resto sobra.</p>
+<blockquote><p><strong>La lista blanca se puede volver en contra.</strong> Si te olvidás de incluir tu propio país, te</p><p>dejás afuera vos mismo: tus troncales y tus teléfonos remotos dejan de entrar. Agregá primero</p><p>el país de tus centrales y operadores, aplicá, verificá que todo sigue andando, y recién</p><p>después endurecé.</p></blockquote>
+<p>&gt;</p>
+<blockquote><p>Las IPs que el geolocalizador no puede ubicar se <strong>dejan pasar</strong> a propósito, para no cortar a</p><p>alguien por un dato faltante. El resto de las defensas sigue actuando sobre ellas.</p></blockquote>
 <blockquote><p><strong>Cómo saber si un ataque logró algo:</strong> mirá el CDR. Si no hay una llamada <em>conectada</em></p><p>(con estado 200 y duración) hacia el destino del atacante, no pasó nada — el borde lo</p><p>frenó. Ver un INVITE en la captura <strong>no</strong> es una brecha: el paquete llega al cable</p><p>porque el 5060 está abierto para el tráfico legítimo, pero Kamailio lo mata en la puerta.</p></blockquote>
 <figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ope-06-soc-ataque.png" alt="SOC durante un ataque: bloqueos con banderas y timeline de eventos" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 6</span>SOC durante un ataque: bloqueos con banderas y timeline de eventos<span class="fn">ope-06-soc-ataque.png</span></figcaption></figure>
 <hr />
@@ -209,7 +249,7 @@ footer{padding:26px 60px 40px;color:#94a3b8;font-size:12.5px;border-top:1px soli
 <ul><li>Un motor no vuelve a verde después de reiniciarlo.</li><li>La IP pública que muestra <em>Red</em> no es la correcta y no se corrige sola.</li><li>El MOS de un enlace está crónicamente bajo pese a que la red parece sana.</li><li>Ves llamadas <em>conectadas</em> hacia destinos que nadie reconoce (posible compromiso de una</li></ul>
 <p>  credencial de extensión — cambiala y revisá el CDR).</p>
 <p>Para todo lo demás, el borde está hecho para que lo operes vos, desde el panel, sin tocar una línea de configuración.</p></main>
-  <footer>SBC-NG · Manual de Operación · versión 0.2.0 · 16/07/2026</footer>
+  <footer>SBC-NG · Manual de Operación · versión 0.3.0 · 20/07/2026</footer>
 </div>
 <button class="top" onclick="window.print()">Descargar PDF</button>
 <script>if(location.search.indexOf("print=1")>=0){window.addEventListener("load",function(){setTimeout(function(){window.print()},400)});}</script>

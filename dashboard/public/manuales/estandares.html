@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SBC-NG · Estándares y RFCs</title>
+<style>:root{--accent:#0891b2;--soft:#0891b214}
+*{box-sizing:border-box}
+body{margin:0;background:#eef1f6;color:#0f172a;font:16px/1.65 -apple-system,'Segoe UI',Roboto,Inter,Arial,sans-serif}
+.page{max-width:900px;margin:0 auto;background:#fff;box-shadow:0 4px 30px rgba(15,23,42,.07)}   /* ~A4 a 96dpi: 794px de contenido + márgenes */
+.cover{position:relative;min-height:940px;padding:0;background:#fff;color:#0f172a;display:flex;flex-direction:column}
+.cover .bar{height:14px;background:var(--accent)}
+.cover .side{position:absolute;left:0;top:14px;bottom:0;width:8px;background:linear-gradient(180deg,var(--accent),#0f1a30)}
+.cover .inner{padding:58px 64px 46px 74px;display:flex;flex-direction:column;flex:1}
+.cover .brandline{display:flex;align-items:center;gap:14px;border-bottom:1px solid #e8edf4;padding-bottom:18px}
+.cover .mark{width:46px;height:46px;border-radius:11px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px}
+.cover .brand{font-size:19px;font-weight:800;letter-spacing:-.2px}
+.cover .brandsub{font-size:12px;color:#94a3b8}
+.cover .mid{flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px 0}
+.cover .doctype{font-size:12px;font-weight:800;letter-spacing:2.6px;text-transform:uppercase;color:var(--accent)}
+.cover h1{font-size:52px;line-height:1.05;margin:16px 0 0;font-weight:800;letter-spacing:-1px;color:#0f172a}
+.cover .rule{width:96px;height:5px;background:var(--accent);border-radius:3px;margin:26px 0 22px}
+.cover .sub{font-size:19px;color:#475569;max-width:560px;line-height:1.5}
+.cover .metatable{border-top:1px solid #e8edf4;padding-top:22px;display:flex;gap:60px;flex-wrap:wrap}
+.cover .metatable div span{display:block;font-size:10.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#94a3b8;margin-bottom:5px}
+.cover .metatable div b{font-size:14.5px;font-weight:600;color:#334155}
+.cover .foot{margin-top:26px;font-size:11px;color:#94a3b8}
+.cover .wm{position:absolute;right:-40px;top:120px;opacity:.06;transform:rotate(-8deg);pointer-events:none}
+.toc{padding:34px 60px;border-bottom:1px solid #e8edf4;background:#f8fafc}
+.toc h2{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:#94a3b8;margin:0 0 14px}
+.toc a{display:block;color:#334155;text-decoration:none;padding:4px 0;font-size:14.5px;border-left:2px solid transparent;padding-left:12px}
+.toc a:hover{color:var(--accent);border-left-color:var(--accent)}
+.toc a.l3{padding-left:30px;font-size:13.5px;color:#64748b}
+main{padding:44px 64px 70px}
+h1{font-size:30px;margin:0 0 22px}
+h2{font-size:24px;margin:0 0 6px;padding:0;color:#0f172a;letter-spacing:-.3px;scroll-margin-top:20px}
+.chapter{margin:52px 0 20px;padding-top:22px;border-top:3px solid var(--accent)}
+.chapter:first-of-type{margin-top:0;border-top:none;padding-top:0}
+.chapter .num{display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent);margin-bottom:7px}
+h3{font-size:17px;margin:30px 0 10px;color:#1e293b;padding-left:12px;border-left:3px solid #e2e8f0;scroll-margin-top:20px}
+h4{font-size:14.5px;margin:20px 0 8px;color:#475569;font-weight:700}
+p{margin:12px 0}
+code{background:#f1f5f9;padding:2px 6px;border-radius:5px;font:13.5px/1.5 ui-monospace,Consolas,monospace;color:#be123c}
+pre{background:#0f1a30;color:#e2e8f0;padding:16px 18px;border-radius:11px;overflow:auto;margin:16px 0}
+pre code{background:none;color:inherit;padding:0;font-size:13.5px}
+blockquote{margin:18px 0;padding:14px 18px;background:var(--soft);border-left:4px solid var(--accent);border-radius:0 10px 10px 0}
+blockquote p{margin:5px 0;font-size:14.5px;color:#334155}
+.tw{overflow-x:auto;margin:18px 0}
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+th{text-align:left;background:#f8fafc;color:#475569;font-weight:700;font-size:12.5px;letter-spacing:.4px;text-transform:uppercase;padding:11px 13px;border-bottom:2px solid #e8edf4}
+td{padding:11px 13px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+tr:last-child td{border-bottom:none}
+ul,ol{margin:12px 0;padding-left:24px}
+li{margin:6px 0}
+hr{border:none;border-top:1px solid #e8edf4;margin:38px 0}
+.nav{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin:14px 0 18px;padding:11px 15px;background:var(--soft);border:1px solid var(--accent);border-left-width:4px;border-radius:9px;font-size:14px;color:#334155}
+.nav .navk{font-size:10px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:var(--accent);padding-right:4px}
+.nav b{font-weight:700;color:#0f172a}
+.nav .sep{color:#94a3b8;font-weight:400}
+/* Lamina: la imagen es lo primero y ocupa la hoja; el titulo va DEBAJO, como pie de figura. */
+figure.shot{margin:34px 0 30px;text-align:center;break-inside:avoid}
+figure.shot .frame{background:linear-gradient(160deg,#f8fafc,#eef2f7);border:1px solid #e2e8f0;border-radius:14px;padding:14px}
+figure.shot img{display:block;max-width:100%;margin:0 auto;border-radius:9px;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(15,23,42,.13)}
+figure.shot figcaption{margin-top:14px;font-size:14px;color:#334155;font-weight:600;line-height:1.4}
+figure.shot .fig{display:block;font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+figure.shot .fn{display:block;font:11px ui-monospace,Consolas,monospace;color:#cbd5e1;margin-top:5px;font-weight:400}
+figure.shot.ph .frame{border:2px dashed #cbd5e1;background:#f8fafc;padding:56px 20px}
+figure.shot.ph .frame::before{content:'Imagen pendiente';display:block;font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#94a3b8}
+figure.shot.ph .fn{color:var(--accent);font-weight:700;margin-top:6px}
+footer{padding:26px 60px 40px;color:#94a3b8;font-size:12.5px;border-top:1px solid #eef1f7}
+.top{position:fixed;right:22px;bottom:22px;background:var(--accent);color:#fff;border:0;border-radius:11px;padding:11px 16px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(15,23,42,.2)}
+@media print{
+  body{background:#fff}
+  .page{box-shadow:none;max-width:none}
+  .top{display:none}
+  .cover{padding:60px 40px;page-break-after:always}
+  .toc{page-break-after:always}
+  main{padding:0 10px}
+  .chapter{page-break-before:always;page-break-after:avoid;border-top:3px solid var(--accent)}
+  .chapter:first-of-type{page-break-before:avoid}
+  h2,h3{page-break-after:avoid}
+  @page{size:A4;margin:18mm 16mm 20mm}
+  @page{@bottom-right{content:"Pagina " counter(page) " / " counter(pages);font-size:9px;color:#94a3b8}}
+  @page:first{margin:0}
+  @page:first{@bottom-right{content:""}}
+  /* La imagen siempre empieza arriba de la hoja: se lleva su titulo consigo y nada la parte. */
+  figure.shot{break-inside:avoid;margin:20px 0 24px}
+  figure.shot .frame{padding:10px}
+  figure.shot img{max-height:118mm}
+  table,pre,blockquote{page-break-inside:avoid}
+  p,li{orphans:3;widows:3}
+  h4{page-break-after:avoid}
+  a{color:inherit;text-decoration:none}
+}
+</style></head>
+<body>
+<div class="page">
+  <header class="cover">
+      <div class="wm"><svg width="280" height="280" viewBox="0 0 64 64" fill="none" style="opacity:1.0" xmlns="http://www.w3.org/2000/svg" aria-label="SBC-NG"><path d="M32 4.5 L56 13.5 V31 c0 14.4 -9.9 25.5 -24 28.5 C17.9 56.5 8 45.4 8 31 V13.5 Z" fill="none" stroke="#0891b2" stroke-width="3.4" stroke-linejoin="round"/><path d="M20 20 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 a3.5 3.5 0 0 1 -3.5 3.5 h-6 l-5 5 v-5 h-2 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 A3.5 3.5 0 0 1 20 20 Z" fill="none" stroke="#0891b2" stroke-width="3" stroke-linejoin="round"/><path d="M31 27.5 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 A3.5 3.5 0 0 1 44 43.5 h-2 v5 l-5 -5 h-6 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 a3.5 3.5 0 0 1 3.5 -3.5 Z" fill="none" stroke="#0891b2" stroke-width="3" stroke-linejoin="round" opacity="0.65"/></svg></div>
+    <div class="bar"></div><div class="side"></div>
+    <div class="inner">
+      <div class="brandline">
+        <div class="mark"><svg width="30" height="30" viewBox="0 0 64 64" fill="none" style="opacity:1.0" xmlns="http://www.w3.org/2000/svg" aria-label="SBC-NG"><path d="M32 4.5 L56 13.5 V31 c0 14.4 -9.9 25.5 -24 28.5 C17.9 56.5 8 45.4 8 31 V13.5 Z" fill="none" stroke="#fff" stroke-width="3.4" stroke-linejoin="round"/><path d="M20 20 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 a3.5 3.5 0 0 1 -3.5 3.5 h-6 l-5 5 v-5 h-2 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 A3.5 3.5 0 0 1 20 20 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M31 27.5 h13 a3.5 3.5 0 0 1 3.5 3.5 v9 A3.5 3.5 0 0 1 44 43.5 h-2 v5 l-5 -5 h-6 a3.5 3.5 0 0 1 -3.5 -3.5 v-9 a3.5 3.5 0 0 1 3.5 -3.5 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round" opacity="0.65"/></svg></div>
+        <div>
+          <div class="brand">SBC-NG</div>
+          <div class="brandsub">Session Border Controller · el borde de tu telefonía</div>
+        </div>
+      </div>
+      <div class="mid">
+        <div class="doctype">Documentación oficial</div>
+        <h1>Estándares y RFCs</h1>
+        <div class="rule"></div>
+        <div class="sub">Qué RFC cumple el borde y dónde se configura</div>
+      </div>
+      <div class="metatable">
+        <div><span>Dirigido a</span><b>Integrador / Auditoría</b></div>
+        <div><span>Versión del producto</span><b>0.3.0</b></div>
+        <div><span>Actualizado</span><b>20/07/2026</b></div>
+        <div><span>Documento</span><b>ESTANDARES</b></div>
+      </div>
+      <div class="foot">© 2026 SBC-NG · Este documento puede actualizarse sin previo aviso.</div>
+    </div>
+  </header>
+  <nav class="toc"><h2>Contenido</h2><a class="l2" href="#c-mo-leer-el-nivel">Cómo leer el nivel</a><a class="l2" href="#se-alizaci-n-sip">Señalización SIP</a><a class="l2" href="#autenticaci-n-y-registro">Autenticación y registro</a><a class="l2" href="#medios-rtp-srtp-webrtc">Medios (RTP / SRTP / WebRTC)</a><a class="l2" href="#transporte-y-nat">Transporte y NAT</a><a class="l2" href="#identidad-y-anti-fraude-stir-shaken">Identidad y anti-fraude (STIR/SHAKEN)</a><a class="l2" href="#seguridad-del-borde-pr-cticas">Seguridad del borde (prácticas)</a></nav>
+  <main><p>Este documento lista los estándares (RFC del IETF y equivalentes) que <strong>SBC-NG implementa</strong>, con qué nivel de cumplimiento y <strong>dónde está la configuración</strong> que los sostiene. Es un mapa técnico pensado para integradores, operadores y auditorías: cada fila se puede verificar mirando el archivo o el módulo que se indica.</p>
+<p>SBC-NG es un <strong>Session Border Controller</strong>: se apoya en el núcleo SIP de <strong>Kamailio 6.1</strong>, ancla y transcodifica medios con <strong>rtpengine (mr13.5)</strong>, termina STUN/TURN con <strong>coturn</strong> y firma/verifica identidad con <strong>secsipid</strong>. Por su rol de borde, muchos RFC se cumplen en el plano que le corresponde a un SBC (proxy/back-to-back, anclaje de medios, control de sesión), no como agente de usuario final.</p>
+<div class="chapter"><span class="num"></span><h2 id="c-mo-leer-el-nivel">Cómo leer el nivel</h2></div>
+<div class="tw"><table><thead><tr><th>Nivel</th><th>Qué significa</th></tr></thead><tbody><tr><td><strong>Completo</strong></td><td>Implementado y activo por defecto en el plano que le toca al borde.</td></tr><tr><td><strong>Opcional</strong></td><td>Implementado y soportado; se activa desde el panel (Motor SIP / Seguridad). Apagado no incumple nada, simplemente no está en uso.</td></tr><tr><td><strong>Parcial</strong></td><td>Se cumple lo necesario para el caso de borde; no se implementa el RFC entero (por diseño, es rol del extremo).</td></tr><tr><td><strong>Transparente</strong></td><td>El SBC no lo termina: preserva las cabeceras y deja que los extremos lo negocien de punta a punta.</td></tr></tbody></table></div>
+<blockquote><p><strong>Núcleo cumplido al 100%.</strong> En su configuración de fábrica, SBC-NG cumple de forma completa: <strong>RFC 3261</strong> (SIP), <strong>RFC 3263</strong> (localización de servidores), <strong>RFC 3264</strong> (oferta/respuesta SDP), <strong>RFC 3581</strong> (rport / NAT de señalización), <strong>RFC 3550/3551</strong> (RTP), <strong>RFC 3711 + 4568</strong> (SRTP con SDES), <strong>RFC 5763/5764</strong> (DTLS-SRTP para WebRTC), <strong>RFC 8445</strong> (ICE), <strong>RFC 5389/8489</strong> (STUN), <strong>RFC 5766/8656</strong> (TURN) y <strong>RFC 7118</strong> (SIP sobre WebSocket). Todo esto anda sin activar ningún módulo opcional.</p></blockquote>
+<div class="chapter"><span class="num"></span><h2 id="se-alizaci-n-sip">Señalización SIP</h2></div>
+<div class="tw"><table><thead><tr><th>RFC</th><th>Título</th><th>Nivel</th><th>Dónde está</th></tr></thead><tbody><tr><td>RFC 3261</td><td>SIP: Session Initiation Protocol</td><td>Completo</td><td>Núcleo Kamailio: <code>tm</code>, <code>sl</code>, <code>rr</code>, <code>maxfwd</code>, <code>sanity</code> — <code>docker/config/kamailio/kamailio.cfg</code> (<code>request_route</code>)</td></tr><tr><td>RFC 3263</td><td>Locating SIP Servers (NAPTR/SRV/A)</td><td>Completo</td><td>Resolución del núcleo + <code>dispatcher</code> hacia las centrales</td></tr><tr><td>RFC 3581</td><td>Extensión <code>rport</code> (respuesta simétrica)</td><td>Completo</td><td><code>force_rport()</code> en <code>request_route</code> — <code>kamailio.cfg</code></td></tr><tr><td>RFC 3327</td><td>Extensión <code>Path</code> en el registro</td><td>Parcial</td><td><code>usrloc</code> (registrar del borde) — <code>control-plane/config.js</code></td></tr><tr><td>RFC 5626</td><td>Managing Client-Initiated Connections (keepalive/flow)</td><td>Parcial</td><td><code>nathelper</code> (<code>set_contact_alias</code>, natping), WebSocket keepalive</td></tr><tr><td>RFC 3325</td><td>P-Asserted-Identity</td><td>Transparente</td><td>Se preserva; el ruteo puede reescribir según troncal</td></tr><tr><td>RFC 3323</td><td>Privacy Mechanism</td><td>Parcial</td><td>Ocultamiento de topología (<code>topoh</code> / <code>topos</code>, Seguridad)</td></tr><tr><td>RFC 3515</td><td>REFER (transferencias)</td><td>Transparente</td><td>El proxy relaya REFER/NOTIFY de punta a punta</td></tr><tr><td>RFC 3891 / 3892</td><td>Replaces / Referred-By</td><td>Transparente</td><td>Cabeceras preservadas en el diálogo</td></tr><tr><td>RFC 3262</td><td>PRACK (respuestas provisionales fiables)</td><td>Transparente</td><td>Negociado entre extremos; el borde no lo termina</td></tr><tr><td>RFC 3311</td><td>UPDATE</td><td>Transparente</td><td>Preservado en el diálogo</td></tr><tr><td>RFC 4028</td><td>Session Timers</td><td>Opcional</td><td>Módulo <code>sst</code> (Motor SIP → Troncales) — <code>kamailio.cfg</code></td></tr></tbody></table></div>
+<div class="chapter"><span class="num"></span><h2 id="autenticaci-n-y-registro">Autenticación y registro</h2></div>
+<div class="tw"><table><thead><tr><th>RFC</th><th>Título</th><th>Nivel</th><th>Dónde está</th></tr></thead><tbody><tr><td>RFC 3261 §22 / RFC 2617</td><td>Autenticación Digest (HTTP/SIP)</td><td>Opcional</td><td>Registrar del borde: <code>auth</code> + <code>auth_db</code> contra tabla <code>subscriber</code> — panel <strong>/registros</strong></td></tr><tr><td>RFC 7616</td><td>HTTP Digest actualizado (algoritmos)</td><td>Parcial</td><td><code>auth_db</code> (MD5 por defecto; SHA-256 según build)</td></tr><tr><td>RFC 3261 §10</td><td>Registrar / REGISTER</td><td>Opcional</td><td>Módulos <code>registrar</code> + <code>usrloc</code> — se activa en <strong>/registros</strong></td></tr></tbody></table></div>
+<div class="chapter"><span class="num"></span><h2 id="medios-rtp-srtp-webrtc">Medios (RTP / SRTP / WebRTC)</h2></div>
+<div class="tw"><table><thead><tr><th>RFC</th><th>Título</th><th>Nivel</th><th>Dónde está</th></tr></thead><tbody><tr><td>RFC 3264</td><td>Modelo Oferta/Respuesta con SDP</td><td>Completo</td><td><code>rtpengine_manage()</code> en <code>request_route</code> — <code>kamailio.cfg</code></td></tr><tr><td>RFC 3550 / 3551</td><td>RTP y su perfil de audio/video</td><td>Completo</td><td>rtpengine (anclaje de medios en el borde)</td></tr><tr><td>RFC 4566</td><td>SDP: Session Description Protocol</td><td>Completo</td><td>Reescritura de SDP por rtpengine (<code>replace-origin</code>, <code>replace-session-connection</code>)</td></tr><tr><td>RFC 3711</td><td>SRTP (medios cifrados)</td><td>Completo</td><td>rtpengine — interworking SRTP↔RTP</td></tr><tr><td>RFC 4568</td><td>SDES: claves SRTP en el SDP (<code>a=crypto</code>)</td><td>Completo</td><td>rtpengine (<code>RTP/AVP</code> fuerza RTP plano hacia la central) — <code>kamailio.cfg</code></td></tr><tr><td>RFC 5763 / 5764</td><td>DTLS-SRTP (WebRTC)</td><td>Completo</td><td>rtpengine (<code>DTLS</code>, <code>RTP/SAVPF</code>) para patas WS/WSS — <code>kamailio.cfg</code></td></tr><tr><td>RFC 8445</td><td>ICE: Interactive Connectivity Establishment</td><td>Completo</td><td>rtpengine <code>ICE=force</code> (hacia WebRTC) / <code>ICE=remove</code> (hacia la central)</td></tr><tr><td>RFC 8825–8834</td><td>Arquitectura y protocolos WebRTC</td><td>Completo</td><td><code>websocket</code> + rtpengine (borde WebRTC)</td></tr><tr><td>RFC 4733</td><td>Eventos de telefonía (DTMF fuera de banda)</td><td>Transparente</td><td>Perfil RTP negociado por los extremos; rtpengine lo preserva</td></tr></tbody></table></div>
+<div class="chapter"><span class="num"></span><h2 id="transporte-y-nat">Transporte y NAT</h2></div>
+<div class="tw"><table><thead><tr><th>RFC</th><th>Título</th><th>Nivel</th><th>Dónde está</th></tr></thead><tbody><tr><td>RFC 7118</td><td>SIP sobre WebSocket</td><td>Completo</td><td><code>websocket</code> + <code>ws_handle_handshake()</code> — <code>kamailio.cfg</code> (<code>event_route[xhttp:request]</code>)</td></tr><tr><td>RFC 5389 / 8489</td><td>STUN</td><td>Completo</td><td>coturn — <code>docker/config/coturn/turnserver.tpl</code></td></tr><tr><td>RFC 5766 / 8656</td><td>TURN (relay de medios)</td><td>Completo</td><td>coturn (perfil <code>turn</code>) — instalador y <code>turnserver.tpl</code></td></tr><tr><td>RFC 3261 §26 / RFC 5630</td><td>SIP sobre TLS (<code>sips</code>)</td><td>Opcional</td><td>TLS nativo (<code>enable_tls</code>, <code>listen=tls:5061</code>) o terminado por el proxy — <strong>/certificados</strong></td></tr><tr><td>RFC 8446 / 5246</td><td>TLS 1.3 / 1.2</td><td>Completo</td><td>Terminación TLS (nativa <code>tls.so</code> o reverse-proxy NPM)</td></tr></tbody></table></div>
+<div class="chapter"><span class="num"></span><h2 id="identidad-y-anti-fraude-stir-shaken">Identidad y anti-fraude (STIR/SHAKEN)</h2></div>
+<div class="tw"><table><thead><tr><th>RFC</th><th>Título</th><th>Nivel</th><th>Dónde está</th></tr></thead><tbody><tr><td>RFC 8224</td><td>Authenticated Identity Management in SIP</td><td>Opcional</td><td><code>secsipid</code> — panel <strong>/stir</strong> (verificar/firmar <code>Identity</code>)</td></tr><tr><td>RFC 8225</td><td>PASSporT (token de identidad)</td><td>Opcional</td><td><code>secsipid_add_identity()</code> / <code>secsipid_check_identity()</code> — <code>control-plane/config.js</code> (<code>stir.cfg</code>)</td></tr><tr><td>RFC 8226</td><td>Certificados para PASSporT</td><td>Opcional</td><td>Par de claves EC (ES256) + <code>x5u</code> — <strong>/stir</strong></td></tr></tbody></table></div>
+<div class="chapter"><span class="num"></span><h2 id="seguridad-del-borde-pr-cticas">Seguridad del borde (prácticas)</h2></div>
+<p>Estas defensas no son un RFC de protocolo, pero son parte del rol del SBC y conviene documentarlas junto con lo anterior:</p>
+<div class="tw"><table><thead><tr><th>Defensa</th><th>Qué hace</th><th>Dónde está</th></tr></thead><tbody><tr><td>Anti-flood</td><td>Corta inundaciones de SIP por IP (<code>pike</code> + <code>ipban</code>)</td><td><code>kamailio.cfg</code> + <strong>/seguridad</strong></td></tr><tr><td>Filtro de escáneres</td><td>Bloquea sipvicious/sipcli y User-Agents maliciosos (<code>secfilter</code>)</td><td><strong>/seguridad → Listas</strong></td></tr><tr><td>Filtro por país</td><td>Lista negra o blanca por país de origen (<code>geoip2</code>)</td><td><strong>/seguridad → Filtro por país</strong></td></tr><tr><td>Ocultamiento de topología</td><td>Enmascara la red interna (<code>topoh</code> / <code>topos</code>)</td><td>Motor SIP → Seguridad</td></tr><tr><td>Control de admisión (CAC)</td><td>Tope de llamadas simultáneas por troncal</td><td>Troncales</td></tr></tbody></table></div>
+<blockquote><p><strong>Alcance.</strong> "Completo" describe el cumplimiento en el plano que le corresponde a un SBC (proxy/B2BUA, anclaje y traducción de medios, control de sesión y seguridad de borde). Extensiones que son responsabilidad del agente de usuario (PRACK, UPDATE, REFER) se marcan <strong>Transparente</strong>: el borde no las termina, las deja pasar íntegras para que los extremos las negocien. La versión exacta de cada motor está en <strong>Sistema → Acerca de</strong>.</p></blockquote></main>
+  <footer>SBC-NG · Estándares y RFCs · versión 0.3.0 · 20/07/2026</footer>
+</div>
+<button class="top" onclick="window.print()">Descargar PDF</button>
+<script>if(location.search.indexOf("print=1")>=0){window.addEventListener("load",function(){setTimeout(function(){window.print()},400)});}</script>
+</body></html>

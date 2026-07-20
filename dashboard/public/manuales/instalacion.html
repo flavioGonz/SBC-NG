@@ -111,8 +111,8 @@ footer{padding:26px 60px 40px;color:#94a3b8;font-size:12.5px;border-top:1px soli
       </div>
       <div class="metatable">
         <div><span>Dirigido a</span><b>Técnico / integrador</b></div>
-        <div><span>Versión del producto</span><b>0.2.0</b></div>
-        <div><span>Actualizado</span><b>16/07/2026</b></div>
+        <div><span>Versión del producto</span><b>0.3.0</b></div>
+        <div><span>Actualizado</span><b>20/07/2026</b></div>
         <div><span>Documento</span><b>INSTALACION</b></div>
       </div>
       <div class="foot">© 2026 SBC-NG · Este documento puede actualizarse sin previo aviso.</div>
@@ -203,8 +203,14 @@ https://sbc.miempresa.com/ (a través del proxy, con TLS)</code></pre>
 <blockquote><p><strong>Cómo verificarlo:</strong> desde una terminal, `curl --http1.1 -i -N -H "Upgrade: websocket"</p><p>-H "Connection: Upgrade" -H "Sec-WebSocket-Key: x" -H "Sec-WebSocket-Version: 13"</p><p>https://sbc.miempresa.com/ws` tiene que responder <strong>101</strong>. Con HTTP/2 da 404 — es</p><p>normal, el Upgrade no aplica; probá siempre con <code>--http1.1</code>.</p></blockquote>
 <hr />
 <div class="chapter"><span class="num">Capítulo 7</span><h2 id="7-puertos-y-nat">Puertos y NAT</h2></div>
-<p>Si el SBC está detrás de un router/firewall, redirigí estos puertos desde la IP pública hacia la IP del SBC:</p>
-<div class="tw"><table><thead><tr><th>Puerto</th><th>Protocolo</th><th>Para qué</th></tr></thead><tbody><tr><td>5060</td><td>UDP y TCP</td><td>Señalización SIP</td></tr><tr><td>8088</td><td>TCP</td><td>WebSocket SIP (softphones WebRTC)</td></tr><tr><td>3478</td><td>UDP y TCP</td><td>STUN/TURN (coturn)</td></tr><tr><td>49152–65535</td><td>UDP</td><td>Medios RTP (rtpengine) — rango amplio</td></tr><tr><td>30000–40000</td><td>UDP</td><td>Relay TURN (coturn)</td></tr></tbody></table></div>
+<p>Si el SBC está detrás de un router/firewall, redirigí los puertos desde la IP pública hacia la IP del SBC. <strong>Qué puertos abrir depende del modo TLS</strong>, que se elige en el panel (<em>Certificados → Modo TLS del borde</em>).</p>
+<p><strong>Siempre — en cualquier modo:</strong></p>
+<div class="tw"><table><thead><tr><th>Puerto</th><th>Protocolo</th><th>Para qué</th></tr></thead><tbody><tr><td>5060</td><td>UDP y TCP</td><td>Señalización SIP (en claro)</td></tr><tr><td>3478</td><td>UDP y TCP</td><td>STUN/TURN (coturn)</td></tr><tr><td>49152–65535</td><td>UDP</td><td>Medios RTP (rtpengine) — rango amplio</td></tr><tr><td>30000–40000</td><td>UDP</td><td>Relay TURN (coturn)</td></tr></tbody></table></div>
+<p><strong>Modo «Detrás de un proxy» (por defecto):</strong> el proxy inverso (NGINX/NPM) publica el HTTPS/WSS y le reenvía <code>ws</code> en claro al SBC. Los puertos TLS los abre el proxy, no el SBC. Del lado del SBC alcanza con que el 8088 sea accesible <strong>desde el proxy</strong> (red interna), no desde internet:</p>
+<div class="tw"><table><thead><tr><th>Puerto</th><th>Protocolo</th><th>Para qué</th></tr></thead><tbody><tr><td>8088</td><td>TCP</td><td>WebSocket SIP (el proxy termina TLS y reenvía <code>ws</code>)</td></tr></tbody></table></div>
+<p><strong>Modo «TLS nativo» (sin proxy):</strong> el SBC hace su propio TLS con el certificado de Let's Encrypt (o uno autofirmado). Abrí, <strong>además de los de «siempre»</strong>:</p>
+<div class="tw"><table><thead><tr><th>Puerto</th><th>Protocolo</th><th>Para qué</th></tr></thead><tbody><tr><td>5061</td><td>TCP</td><td>SIP sobre TLS (SIPS) — operadores/teléfonos seguros</td></tr><tr><td>8443</td><td>TCP</td><td>WSS — WebSocket SIP seguro (WebRTC sin proxy)</td></tr></tbody></table></div>
+<blockquote><p><strong>Regla rápida:</strong> abrí <strong>5061 y/o 8443 sólo si activaste «TLS nativo»</strong> y necesitás</p><p>conexiones <strong>entrantes</strong> desde internet. Si el SBC se registra <strong>saliente</strong> contra el</p><p>operador, no hace falta abrir SIP entrante. Si usás el proxy, no toques 5061/8443:</p><p>el cifrado hacia afuera ya lo hace el proxy.</p></blockquote>
 <p>El detalle completo, con el porqué de cada uno y las notas de <em>hairpin NAT</em>, está en <code>docs/FIREWALL.md</code> del repositorio.</p>
 <figure class="shot"><div class="frame"><img src="/backend/api/v1/manuales/img/ins-06-nat.png" alt="Tabla de port-forwarding en el router apuntando al SBC" onerror="this.parentNode.parentNode.classList.add('ph');this.remove();" /></div><figcaption><span class="fig">Figura 6</span>Tabla de port-forwarding en el router apuntando al SBC<span class="fn">ins-06-nat.png</span></figcaption></figure>
 <hr />
@@ -216,7 +222,7 @@ https://sbc.miempresa.com/ (a través del proxy, con TLS)</code></pre>
 <p>Antes de dar el borde por instalado, confirmá:</p>
 <ul><li>[ ] El panel abre y pudiste cambiar la contraseña inicial.</li><li>[ ] En <em>Monitor → Resumen</em> todos los motores están en verde.</li><li>[ ] En <em>Red</em>, el SBC muestra su IP pública correcta (la real, no una privada).</li><li>[ ] Si usás softphones WebRTC, el <code>curl</code> al <code>/ws</code> devuelve 101.</li><li>[ ] Los puertos de la tabla están redirigidos.</li><li>[ ] Ninguna central tiene ya un puerto SIP expuesto a internet.</li></ul>
 <p>Con eso, el borde está listo para empezar a configurar centrales y troncales — eso es el <strong>Manual de Configuración</strong>.</p></main>
-  <footer>SBC-NG · Manual de Instalación · versión 0.2.0 · 16/07/2026</footer>
+  <footer>SBC-NG · Manual de Instalación · versión 0.3.0 · 20/07/2026</footer>
 </div>
 <button class="top" onclick="window.print()">Descargar PDF</button>
 <script>if(location.search.indexOf("print=1")>=0){window.addEventListener("load",function(){setTimeout(function(){window.print()},400)});}</script>

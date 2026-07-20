@@ -80,7 +80,36 @@ SBC queda registrada con origen, destino, hora, duración y resultado. Es la fue
 verdad para facturación, disputas y auditoría, porque registra lo que *realmente* pasó por
 el borde, no lo que la central *creyó* que pasó.
 
-Podés filtrar por fecha, número y estado, y exportar el resultado.
+**Qué te dice cada fila, además de lo obvio:**
+
+- **De dónde vino**: la bandera del país de la IP origen y el ISP. Las llamadas que vienen de
+  tu red interna o de la central se marcan con un ícono de servidor en vez de bandera.
+- **Si esa IP está bloqueada** ahora mismo en el borde: la fila se pinta en rojo suave y lleva
+  un distintivo. Sirve para responder rápido *"¿este atacante llegó a cursar algo?"*.
+- **Qué significa el resultado**: pasá el mouse por el estado y el panel te explica el código
+  SIP en criollo. No hace falta saberse la RFC de memoria.
+
+**Los filtros** son por período (hoy, 7 días, 30 días, todo, o un rango a medida) y por estado
+(todas, atendidas, no atendidas, o **sólo las que vienen de una IP bloqueada**). Arriba se ve el
+**ASR** — qué porcentaje de los intentos terminó atendido — que es el número que primero mira
+cualquiera que audite tráfico.
+
+> **Sobre el ASR.** Un ASR muy bajo casi siempre significa una de tres cosas: números mal
+> normalizados en el ruteo, una troncal con problemas, o alguien escaneando. El CDR filtrado por
+> *no atendidas* te dice cuál de las tres es en menos de un minuto.
+
+### 4.1 Los códigos que más vas a ver
+
+| Código | Qué pasó realmente | Por dónde empezar |
+|---|---|---|
+| **200** | Atendida | — |
+| **404** | El destino no existe donde llegó la llamada | El número marcado o el ruteo: ¿la central tiene esa extensión? |
+| **403** | Rechazada por política | IP no permitida, país bloqueado, o credenciales sin permiso |
+| **408** | Nadie respondió la señalización | El destino está caído o inalcanzable |
+| **486** | Ocupado | El destino estaba en otra llamada |
+| **487** | Cancelada antes de atender | Colgaron, o hubo failover a otra troncal |
+| **488** | **No hubo medios en común** | Códecs o cifrado incompatibles — ver la sección 5.1 |
+| **503** | Sin capacidad | Troncal llena (CAC) u operador caído |
 
 ![CDR del borde con columnas de origen, destino, duración y resultado](img/ope-04-cdr.png)
 
@@ -104,6 +133,42 @@ operador respondió 486.
 
 ![Captura SIP con el buscador y la escalera de un diálogo abierto](img/ope-05-captura.png)
 
+### 5.1 Caso real: "la llamada conecta y corta con 488"
+
+Vale la pena contarlo entero porque es el tipo de problema que más tiempo hace perder, y el
+método sirve para cualquier otro.
+
+**El síntoma.** Un interno marca, y la llamada muere enseguida con **488 Not Acceptable Here**.
+No es que no encuentre el destino (eso sería 404) ni que esté ocupado (486): el otro lado dice
+*"no puedo con los medios que me ofrecés"*.
+
+**Cómo se diagnostica.** El CDR te da el código, pero no el porqué; eso está en el **SDP** (la
+parte del mensaje que describe el audio). Buscá el INVITE en la captura SIP y abrilo: en el
+cuerpo vas a ver algo así:
+
+```
+m=audio 44796 RTP/SAVP 0 8 101
+a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:AXm7rYMwiEuf8qQ...
+a=rtpmap:0 PCMU/8000
+```
+
+Las dos líneas que importan: **`RTP/SAVP`** y **`a=crypto`** significan que ese teléfono está
+ofreciendo **audio cifrado (SRTP)**. Si del otro lado hay una central que sólo habla RTP en
+claro, no hay acuerdo posible y contesta 488.
+
+**Qué hace el SBC.** Justamente esto es lo que resuelve un borde: rtpengine **termina** el
+cifrado del lado del teléfono y le ofrece RTP plano a la central, traduciendo en el medio. No
+hay nada que configurar — pero si ves 488 con `a=crypto` en el SDP, ya sabés que el problema es
+de **cifrado de medios**, no de códecs ni de ruteo.
+
+**El método, en general.** Ante cualquier fallo de medios:
+
+1. Mirá el **código** en el CDR (te dice la familia del problema).
+2. Abrí el **INVITE** en la captura y leé el `m=audio`: el perfil (`RTP/AVP` en claro,
+   `RTP/SAVP` cifrado, `RTP/SAVPF` WebRTC) y los códecs ofrecidos.
+3. Compará con lo que el otro extremo respondió. La incompatibilidad casi siempre salta a la
+   vista en esas dos líneas.
+
 ---
 
 ## 6. Responder a un ataque
@@ -115,7 +180,12 @@ hace falta.
 
 Qué vas a ver en el SOC durante un ataque típico:
 
-- Un pico de **bloqueos** con la bandera del país de origen.
+- El aviso **BAJO ATAQUE** arriba de todo: aparece solo cuando el ritmo de eventos del último
+  minuto pasa el umbral, y muestra cuántos eventos por minuto, desde cuántas IPs, y cuál es la
+  que más golpea. Es informativo — las defensas ya están actuando solas.
+- Un pico de **bloqueos** con la bandera del país de origen, y en la columna **Motivo** el ícono
+  de qué lo frenó: flood, escáner, auth fallida, fraude o país no permitido.
+- En el **mapa de ataques**, un punto pulsante por país de origen (pasá el mouse para ver cuál).
 - En el **timeline**, eventos como *"drop escaneo PSTN"* o *"fuerza bruta de registro"* con
   la IP y el número que intentaba marcar.
 - El atacante suele **falsificar el From** (decir que es una extensión tuya) mientras
@@ -124,10 +194,31 @@ Qué vas a ver en el SOC durante un ataque típico:
 
 Qué podés hacer:
 
-- **Bloquear** una IP a mano desde la lista, si querés adelantarte al automatismo.
+- **Bloquear** una IP a mano desde la lista, si querés adelantarte al automatismo. También podés
+  **bloquear el país entero** desde la misma fila, si el ataque viene todo del mismo lado.
 - **Desbloquear** una IP si fue un falso positivo (un cliente legítimo que disparó el
   anti-flood).
 - Ajustar los umbrales si ves demasiados falsos positivos o demasiado ruido.
+
+### 6.1 Cerrar el país: lista negra o lista blanca
+
+» Seguridad » Filtro por país
+
+Cuando el ruido viene concentrado geográficamente, esta es la medida más efectiva. Hay dos formas
+y la elección importa:
+
+- **Lista negra** — bloqueás los países que te molestan. Es lo indicado para cortar un foco
+  puntual sin tocar nada más.
+- **Lista blanca** — sólo entran los países que listás y **todo el resto se rechaza**. Es mucho
+  más fuerte, y es lo correcto cuando tu telefonía es de uno o dos países y el resto sobra.
+
+> **La lista blanca se puede volver en contra.** Si te olvidás de incluir tu propio país, te
+> dejás afuera vos mismo: tus troncales y tus teléfonos remotos dejan de entrar. Agregá primero
+> el país de tus centrales y operadores, aplicá, verificá que todo sigue andando, y recién
+> después endurecé.
+>
+> Las IPs que el geolocalizador no puede ubicar se **dejan pasar** a propósito, para no cortar a
+> alguien por un dato faltante. El resto de las defensas sigue actuando sobre ellas.
 
 > **Cómo saber si un ataque logró algo:** mirá el CDR. Si no hay una llamada *conectada*
 > (con estado 200 y duración) hacia el destino del atacante, no pasó nada — el borde lo
