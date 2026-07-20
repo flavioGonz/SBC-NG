@@ -28,6 +28,29 @@ const correo = require('./email');
 const soc = require('./soc');
 const { Server: IOServer } = require('socket.io');
 const seglog = require('./seglog');
+const acme = require('./acme');  // ACME/Let's Encrypt (certificados TLS sin proxy)
+
+/* ─────────────── Reporter hacia la central (PBX) ───────────────
+ * El SBC oculta a Asterisk: las troncales de operador viven ACA. La central no las conoce,
+ * asi que se las empujamos a su tabla pbxng_sbc.trunks (read-only del lado del PBX).
+ * Opt-in: solo corre si esta seteado REPORT_PBX_DB (la URL Postgres de la central). */
+(function reporterCentral() {
+  const url = process.env.REPORT_PBX_DB;
+  if (!url) return;
+  let pbx = null;
+  try { pbx = new (require('pg').Pool)({ connectionString: url, max: 2, connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000 }); }
+  catch (_) { return; }
+  pbx.on('error', () => {});
+  async function tick() {
+    try {
+      const t = await db.get("SELECT name, provider_host, provider_port, transport, mode, enabled, COALESCE(dids, ARRAY[]::text[]) AS dids FROM sbc_trunks WHERE enabled IS DISTINCT FROM false ORDER BY id");
+      const payload = (t || []).map((x) => ({ name: x.name, provider_host: x.provider_host, provider_port: x.provider_port, transport: x.transport, mode: x.mode, dids: x.dids || [] }));
+      await pbx.query("UPDATE pbxng_sbc SET trunks=$1, updated_at=now() WHERE id=1", [JSON.stringify(payload)]);
+    } catch (_) { /* la central puede estar caida; se reintenta */ }
+  }
+  setTimeout(tick, 5000);
+  setInterval(tick, 20000);
+})();
 
 const PORT = +(process.env.PORT || 3100);
 
@@ -351,17 +374,17 @@ app.post('/api/v1/routes', async (req, res) => {
   if (!b.trunk_id) return res.status(400).json({ error: 'hay que decir por que troncal sale' });
   try {
     const r = await db.one(
-      `INSERT INTO sbc_routes (tenant_id, name, pattern, trunk_id, strip, prepend, priority, enabled)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      `INSERT INTO sbc_routes (tenant_id, name, pattern, trunk_id, strip, prepend, priority, enabled, cid_number)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
       [tenant(req), b.name || null, b.pattern || '', +b.trunk_id, +b.strip || 0,
-       b.prepend || null, +b.priority || 10, b.enabled !== false]);
+       b.prepend || null, +b.priority || 10, b.enabled !== false, b.cid_number || null]);
     res.status(201).json(r);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.put('/api/v1/routes/:id', async (req, res) => {
   const b = req.body || {};
-  const campos = ['name', 'pattern', 'trunk_id', 'strip', 'prepend', 'priority', 'enabled'];
+  const campos = ['name', 'pattern', 'trunk_id', 'strip', 'prepend', 'priority', 'enabled', 'cid_number'];
   const sets = []; const args = [];
   for (const c of campos) {
     if (b[c] === undefined) continue;
@@ -402,8 +425,18 @@ app.get('/api/v1/routes/live', async (req, res) => {
  * por Call-ID para armar el registro de llamada: origen, destino, inicio, duración y
  * cómo terminó. Es el CDR del SBC, independiente del de la central.
  */
+const _privada = (ip) => !ip || /^(10\.|127\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
+
 app.get('/api/v1/cdr', async (req, res) => {
   const limite = Math.min(parseInt(req.query.limit, 10) || 200, 1000);
+  // Filtro de fechas opcional (ISO). El panel manda rangos; sin params trae lo último.
+  const cond = []; const args = []; let i = 1;
+  const d1 = req.query.desde ? new Date(req.query.desde) : null;
+  const d2 = req.query.hasta ? new Date(req.query.hasta) : null;
+  if (d1 && !isNaN(d1.getTime())) { cond.push(`time >= $${i++}`); args.push(d1.toISOString()); }
+  if (d2 && !isNaN(d2.getTime())) { cond.push(`time <= $${i++}`); args.push(d2.toISOString()); }
+  const where = cond.length ? 'WHERE ' + cond.join(' AND ') : '';
+  args.push(limite);
   try {
     const filas = await db.get(
       `SELECT callid,
@@ -415,9 +448,10 @@ app.get('/api/v1/cdr', async (req, res) => {
               max(dst)   FILTER (WHERE method='INVITE') AS dst,
               max(srcip) FILTER (WHERE method='INVITE') AS srcip
          FROM acc
+        ${where}
         GROUP BY callid
         ORDER BY max(time) DESC
-        LIMIT $1`, [limite]);
+        LIMIT $${i}`, args);
     const cdr = filas.map((r) => {
       const cod = parseInt(r.codigo, 10) || 0;
       const atendida = cod >= 200 && cod < 300;
@@ -429,6 +463,22 @@ app.get('/api/v1/cdr', async (req, res) => {
         resultado: atendida ? 'atendida' : (cod === 487 ? 'cancelada' : (cod ? 'no contestó' : 'en curso')),
       };
     });
+
+    // Enriquecer con país (bandera en el panel) y si esa IP está bloqueada en el borde.
+    const ips = [...new Set(cdr.map((c) => c.srcip).filter((x) => x && !_privada(x)))].slice(0, 200);
+    let geo = {};
+    if (ips.length) { try { geo = await soc.geo(ips); } catch (_) {} }
+    let bloq = new Set();
+    try {
+      const todas = [...new Set(cdr.map((c) => c.srcip).filter(Boolean))];
+      if (todas.length) { const b = await db.get('SELECT ip FROM sbc_blocked WHERE ip = ANY($1)', [todas]); bloq = new Set(b.map((r) => r.ip)); }
+    } catch (_) {}
+    for (const c of cdr) {
+      const g = geo[c.srcip] || {};
+      c.cc = g.cc || null; c.country = g.country || null; c.isp = g.isp || null;
+      c.interna = _privada(c.srcip);
+      c.bloqueada = bloq.has(c.srcip);
+    }
     res.json(cdr);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -618,6 +668,171 @@ app.post('/api/v1/security/unblock', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+/* Baneo manual desde el panel: mete la IP en el ipban vivo de Kamailio (para que
+ * el borde la rechace ya mismo) y la deja anotada en sbc_blocked con su geo. */
+app.post('/api/v1/security/block', async (req, res) => {
+  const ip = String((req.body && req.body.ip) || '').trim();
+  const nota = (req.body && req.body.reason) || 'baneo manual';
+  if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return res.status(400).json({ error: 'IP inválida' });
+  try {
+    await kam.htableSet('ipban', ip, 1).catch(() => {});
+    const cc = (req.body && req.body.cc) || null;
+    const country = (req.body && req.body.country) || null;
+    const isp = (req.body && req.body.isp) || null;
+    await db.pool.query(
+      `INSERT INTO sbc_blocked (ip, reason, country, cc, isp, hits, blocked_at)
+       VALUES ($1,$2,$3,$4,$5,1,now())
+       ON CONFLICT (ip) DO UPDATE SET reason=EXCLUDED.reason, blocked_at=now()`,
+      [ip, nota, country, cc, isp]);
+    await db.pool.query(
+      "INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'bloqueo','warn',$1)",
+      [JSON.stringify({ ip, pais: country || '?', cc: cc || '', isp: isp || '', motivo: nota })]);
+    res.json({ ok: true, ip });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ─────────────── geo-bloqueo por país (geoip2) ─────────────── */
+app.get('/api/v1/security/geoblock', async (req, res) => {
+  try {
+    const paises = await db.get('SELECT cc, nombre FROM sbc_geoblock ORDER BY cc');
+    const g = await db.one("SELECT habilitado FROM sbc_kam_modules WHERE id='geoip2'");
+    const modo = (await _setting('geoblock_modo', 'block')) === 'allow' ? 'allow' : 'block';
+    res.json({ paises, geoip: !!(g && g.habilitado), modo });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/v1/security/geoblock', async (req, res) => {
+  const lista = Array.isArray(req.body && req.body.paises) ? req.body.paises : [];
+  const modo = (req.body && req.body.modo) === 'allow' ? 'allow' : 'block';
+  try {
+    const filas = lista
+      .map((p) => ({ cc: String((p && p.cc) || p).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2), nombre: (p && p.nombre) || '' }))
+      .filter((p) => p.cc.length === 2);
+    await db.pool.query('BEGIN');
+    await db.pool.query('DELETE FROM sbc_geoblock');
+    for (const p of filas) {
+      await db.pool.query('INSERT INTO sbc_geoblock (cc, nombre) VALUES ($1,$2) ON CONFLICT (cc) DO UPDATE SET nombre=EXCLUDED.nombre', [p.cc, p.nombre]);
+    }
+    await db.pool.query("INSERT INTO sbc_settings (key,value) VALUES ('geoblock_modo',$1) ON CONFLICT (key) DO UPDATE SET value=$1", [modo]);
+    await db.pool.query('COMMIT');
+    res.json({ ok: true, total: filas.length, modo, pendiente: 'aplicar para que el motor lo tome' });
+  } catch (e) { await db.pool.query('ROLLBACK').catch(() => {}); res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/v1/security/geoblock/apply', async (req, res) => {
+  const fs = require('fs');
+  const ruta = require('path').join(cfgen.DIR, 'geoblock.cfg');
+  let previo = null;
+  try { previo = fs.readFileSync(ruta, 'utf8'); } catch (_) {}
+  try {
+    const paises = (await db.get('SELECT cc FROM sbc_geoblock')).map((r) => r.cc);
+    const g = await db.one("SELECT habilitado FROM sbc_kam_modules WHERE id='geoip2'");
+    const geoOn = !!(g && g.habilitado);
+    const modo = (await _setting('geoblock_modo', 'block')) === 'allow' ? 'allow' : 'block';
+    if (paises.length && !geoOn) return res.status(400).json({ error: 'Para filtrar por país primero activá el módulo geoip2 en /motor' });
+    cfgen.geoblock(paises, geoOn, modo);
+    // validar SIN tocar el motor que atiende; si no valida, restaurar y abortar
+    const v = await motores.validarKamailio();
+    if (!v.ok) {
+      if (previo !== null) fs.writeFileSync(ruta, previo);
+      return res.status(400).json({ error: 'la configuración no valida: no se tocó nada', detalle: v.salida });
+    }
+    await motores.reiniciar('kamailio');
+    const vivo = await motores.esperarVivo(15);
+    if (!vivo) {
+      if (previo !== null) fs.writeFileSync(ruta, previo);
+      await motores.reiniciar('kamailio').catch(() => {});
+      const revivio = await motores.esperarVivo(20);
+      return res.status(500).json({ error: 'el motor no levantó con esa configuración: se volvió a la anterior', rollback: true, recuperado: revivio });
+    }
+    res.json({ ok: true, paises: paises.length });
+  } catch (e) {
+    if (previo !== null) { try { fs.writeFileSync(ruta, previo); } catch (_) {} }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* Banear un país entero desde el SOC: lo agrega a la lista de geo-bloqueo y aplica
+ * (mismo camino validado + rollback que /geoblock/apply). Requiere geoip2 activo. */
+app.post('/api/v1/security/geoblock/add', async (req, res) => {
+  const fs = require('fs');
+  const cc = String((req.body && req.body.cc) || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2);
+  const nombre = (req.body && req.body.nombre) || cc;
+  if (cc.length !== 2) return res.status(400).json({ error: 'código de país inválido' });
+  const ruta = require('path').join(cfgen.DIR, 'geoblock.cfg');
+  let previo = null;
+  try { previo = fs.readFileSync(ruta, 'utf8'); } catch (_) {}
+  try {
+    const g = await db.one("SELECT habilitado FROM sbc_kam_modules WHERE id='geoip2'");
+    if (!(g && g.habilitado)) return res.status(400).json({ error: 'Para filtrar por país primero activá el módulo geoip2 en /motor' });
+    const modo = (await _setting('geoblock_modo', 'block')) === 'allow' ? 'allow' : 'block';
+    // "Banear país" siempre significa "que este país NO entre". En lista negra eso es
+    // agregarlo; en lista blanca es SACARLO de los permitidos.
+    if (modo === 'allow') await db.pool.query('DELETE FROM sbc_geoblock WHERE cc=$1', [cc]);
+    else await db.pool.query('INSERT INTO sbc_geoblock (cc, nombre) VALUES ($1,$2) ON CONFLICT (cc) DO UPDATE SET nombre=EXCLUDED.nombre', [cc, nombre]);
+    const paises = (await db.get('SELECT cc FROM sbc_geoblock')).map((r) => r.cc);
+    cfgen.geoblock(paises, true, modo);
+    const v = await motores.validarKamailio();
+    if (!v.ok) { if (previo !== null) fs.writeFileSync(ruta, previo); return res.status(400).json({ error: 'la configuración no valida: no se tocó nada', detalle: v.salida }); }
+    await motores.reiniciar('kamailio');
+    const vivo = await motores.esperarVivo(15);
+    if (!vivo) {
+      if (previo !== null) fs.writeFileSync(ruta, previo);
+      await motores.reiniciar('kamailio').catch(() => {});
+      await motores.esperarVivo(20);
+      return res.status(500).json({ error: 'el motor no levantó: se volvió a la anterior', rollback: true });
+    }
+    res.json({ ok: true, cc, paises: paises.length });
+  } catch (e) {
+    if (previo !== null) { try { fs.writeFileSync(ruta, previo); } catch (_) {} }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* ─────────────── TLS del borde: proxy vs nativo ─────────────── */
+app.get('/api/v1/tls', async (req, res) => {
+  try {
+    const row = await db.one("SELECT value FROM sbc_settings WHERE key='tls_modo'");
+    const modo = (row && row.value) || 'proxy';
+    let certAcme = false;
+    try { certAcme = require('fs').existsSync(require('path').join(cfgen.DIR, 'certs', 'fullchain.pem')); } catch (_) {}
+    res.json({ modo, cert_acme: certAcme, puertos: { sip_tls: 5061, wss: 8443 } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/v1/tls/apply', async (req, res) => {
+  const fs = require('fs');
+  const modo = (req.body && req.body.modo === 'nativo') ? 'nativo' : 'proxy';
+  const ruta = require('path').join(cfgen.DIR, 'tls_native.cfg');
+  let previo = null;
+  try { previo = fs.readFileSync(ruta, 'utf8'); } catch (_) {}
+  try {
+    const pub = await db.one("SELECT value FROM sbc_settings WHERE key='public_ip'");
+    const publicIp = (pub && pub.value) || process.env.PUBLIC_IP || process.env.SELF_IP || '';
+    cfgen.tlsNative(modo === 'nativo', publicIp);
+    const v = await motores.validarKamailio();
+    if (!v.ok) {
+      if (previo !== null) fs.writeFileSync(ruta, previo);
+      return res.status(400).json({ error: 'la configuración no valida: no se tocó nada', detalle: v.salida });
+    }
+    await motores.reiniciar('kamailio');
+    const vivo = await motores.esperarVivo(15);
+    if (!vivo) {
+      if (previo !== null) fs.writeFileSync(ruta, previo);
+      await motores.reiniciar('kamailio').catch(() => {});
+      const revivio = await motores.esperarVivo(20);
+      return res.status(500).json({ error: 'el motor no levantó con TLS nativo: se volvió a la configuración anterior', rollback: true, recuperado: revivio });
+    }
+    await db.pool.query("INSERT INTO sbc_settings (key,value) VALUES ('tls_modo',$1) ON CONFLICT (key) DO UPDATE SET value=$1", [modo]);
+    await db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'motor','info',$1)",
+      [JSON.stringify({ tls_modo: modo })]);
+    res.json({ ok: true, modo });
+  } catch (e) {
+    if (previo !== null) { try { fs.writeFileSync(ruta, previo); } catch (_) {} }
+    res.status(500).json({ error: e.message });
+  }
+});
+
 /* ─────────────── red: las dos patas del SBC ─────────────── */
 
 app.get('/api/v1/network', async (req, res) => {
@@ -679,6 +894,7 @@ async function interfacesConRol() {
       gateway: g.gateway || null,
       vlan: g.vlan || null,
       notas: g.notas || null,
+      deshabilitada: !!g.deshabilitada,
       configurada: !!porNombre[i.name],
     };
   });
@@ -708,9 +924,9 @@ app.put('/api/v1/network/config', async (req, res) => {
     for (const i of (b.interfaces || [])) {
       if (!i.name) continue;
       await db.pool.query(
-        'INSERT INTO sbc_iface (name, rol, modo, ip, gateway, vlan, notas, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7, now()) ' +
-        'ON CONFLICT (name) DO UPDATE SET rol=EXCLUDED.rol, modo=EXCLUDED.modo, ip=EXCLUDED.ip, gateway=EXCLUDED.gateway, vlan=EXCLUDED.vlan, notas=EXCLUDED.notas, updated_at=now()',
-        [i.name, i.rol || 'sin_uso', i.modo || 'dhcp', i.ip_config || i.ip || null, i.gateway || null, i.vlan || null, i.notas || null]);
+        'INSERT INTO sbc_iface (name, rol, modo, ip, gateway, vlan, notas, deshabilitada, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now()) ' +
+        'ON CONFLICT (name) DO UPDATE SET rol=EXCLUDED.rol, modo=EXCLUDED.modo, ip=EXCLUDED.ip, gateway=EXCLUDED.gateway, vlan=EXCLUDED.vlan, notas=EXCLUDED.notas, deshabilitada=EXCLUDED.deshabilitada, updated_at=now()',
+        [i.name, i.rol || 'sin_uso', i.modo || 'dhcp', i.ip_config || i.ip || null, i.gateway || null, i.vlan || null, i.notas || null, i.deshabilitada === undefined ? false : !!i.deshabilitada]);
     }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -725,23 +941,141 @@ app.post('/api/v1/network/plan', async (req, res) => {
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
+/* Commit-confirm: aplicar un cambio de red puede cortar la gestión (si te comés la
+ * placa por la que entrás al panel). Por eso `apply` APLICA y arma un timer de
+ * rollback; si el operador no confirma en `rollback_seg` (porque perdió el panel),
+ * el control-plane re-aplica el último snapshot BUENO (el confirmado). */
+let netPending = null;  // { token, appliedCfg, revertCfg, timer, deadline }
+
+async function cfgEfectivaRed(req) {
+  const cfg = { ...(await db.one('SELECT * FROM sbc_net WHERE id=1')) };
+  cfg.interfaces = await interfacesConRol();
+  cfg.rutas = await db.get('SELECT * FROM sbc_net_routes WHERE tenant_id=$1 ORDER BY metrica', [tenant(req)]);
+  return cfg;
+}
+
 app.post('/api/v1/network/apply', async (req, res) => {
   if (!req.body || req.body.confirmar !== true) {
     return res.status(400).json({ error: 'hay que confirmar: aplicar el modo de red puede cortar la conexion con el panel' });
   }
+  if (netPending) return res.status(409).json({ error: 'hay un cambio de red esperando confirmación; confirmalo o revertilo primero' });
   try {
-    const cfg = { ...(await db.one('SELECT * FROM sbc_net WHERE id=1')) };
-    cfg.interfaces = await interfacesConRol();
-    cfg.rutas = await db.get('SELECT * FROM sbc_net_routes WHERE tenant_id=$1 ORDER BY metrica', [tenant(req)]);
+    const cfg = await cfgEfectivaRed(req);
+    const snap = (await db.one('SELECT applied_snapshot FROM sbc_net WHERE id=1')).applied_snapshot || null;
     const r = await netmode.aplicar(cfg);
-    if (r.ok) {
-      await db.pool.query('UPDATE sbc_net SET aplicado_at=now(), aplicado_por=$1 WHERE id=1',
-        [(req.auth && req.auth.username) || 'api']);
-    }
     await db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'red',$1,$2)",
       [r.ok ? 'info' : 'crit', JSON.stringify({ modo: cfg.modo, ok: r.ok, fallo: r.fallo || null })]);
+    if (!r.ok) return res.status(500).json(r);
+    await db.pool.query('UPDATE sbc_net SET aplicado_at=now(), aplicado_por=$1 WHERE id=1', [(req.auth && req.auth.username) || 'api']);
+    const applied = JSON.parse(JSON.stringify(cfg));
+    if (!snap) {
+      // Primera vez: no hay estado previo al cual volver → queda confirmado solo.
+      await db.pool.query('UPDATE sbc_net SET applied_snapshot=$1 WHERE id=1', [applied]);
+      return res.json({ ok: true, pasos: r.pasos, primera_vez: true });
+    }
+    const seg = Math.min(600, Math.max(20, parseInt(req.body.rollback_seg, 10) || 90));
+    const token = crypto.randomBytes(8).toString('hex');
+    const timer = setTimeout(async () => {
+      try {
+        await netmode.aplicar(snap);
+        await db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'red','warn',$1)",
+          [JSON.stringify({ accion: 'rollback', motivo: 'sin confirmación', modo: snap.modo })]);
+      } catch (_) {}
+      netPending = null;
+    }, seg * 1000);
+    if (timer.unref) timer.unref();
+    netPending = { token, appliedCfg: applied, revertCfg: snap, timer, deadline: Date.now() + seg * 1000 };
+    res.json({ ok: true, pasos: r.pasos, token, expira_en: seg, rollback: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Confirmar: sobreviví al cambio → cancelar el rollback y grabar este estado como el bueno.
+app.post('/api/v1/network/confirm', async (req, res) => {
+  if (!netPending) return res.status(400).json({ error: 'no hay ningún cambio esperando confirmación' });
+  if (req.body && req.body.token && req.body.token !== netPending.token) return res.status(400).json({ error: 'token inválido' });
+  clearTimeout(netPending.timer);
+  try {
+    await db.pool.query('UPDATE sbc_net SET applied_snapshot=$1 WHERE id=1', [netPending.appliedCfg]);
+    await db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'red','info',$1)",
+      [JSON.stringify({ accion: 'confirmar', modo: netPending.appliedCfg.modo })]);
+  } catch (_) {}
+  netPending = null;
+  res.json({ ok: true });
+});
+
+// Revertir ya: volver al último snapshot bueno sin esperar el timer.
+app.post('/api/v1/network/revert', async (req, res) => {
+  if (!netPending) return res.status(400).json({ error: 'no hay ningún cambio esperando confirmación' });
+  clearTimeout(netPending.timer);
+  const snap = netPending.revertCfg; netPending = null;
+  try {
+    const r = await netmode.aplicar(snap);
+    await db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'red','warn',$1)",
+      [JSON.stringify({ accion: 'revertir', modo: snap.modo })]);
     res.status(r.ok ? 200 : 500).json(r);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ¿Hay un cambio en veremos? cuántos segundos quedan para el auto-rollback.
+app.get('/api/v1/network/pending', async (req, res) => {
+  if (!netPending) return res.json({ pendiente: false });
+  res.json({ pendiente: true, token: netPending.token, expira_en: Math.max(0, Math.round((netPending.deadline - Date.now()) / 1000)) });
+});
+
+// Auto-test: ¿el SBC sigue alcanzando su gateway? (el botón "probar" tras aplicar).
+app.post('/api/v1/network/selftest', async (req, res) => {
+  try {
+    const rs = await net.rutas();
+    const def = rs.find((r) => r.destino === 'default');
+    const target = (req.body && req.body.target) || (def && def.via);
+    if (!target) return res.json({ ok: false, error: 'no hay gateway por defecto para probar' });
+    const t0 = Date.now();
+    require('child_process').execFile('ping', ['-c', '2', '-W', '2', String(target)], { timeout: 6000 }, (err, out) => {
+      const ms = Date.now() - t0;
+      const perdida = /100% packet loss/.test(String(out || ''));
+      res.json({ ok: !err && !perdida, target, ms, salida: String(out || '').split('\n').slice(-3).join('\n') });
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ═══════════════ DIALPLAN: traducción de números (prep, módulo default-off) ═══
+ *
+ * CRUD de las reglas de la tabla `dialplan` que lee Kamailio. Escribir acá no cambia
+ * nada hasta que (a) el módulo dialplan esté habilitado en /motor y (b) el ruteo llame
+ * dp_translate(). El reload recarga la tabla en memoria (sólo si el módulo está activo). */
+app.get('/api/v1/dialplan/rules', async (req, res) => {
+  try { res.json(await db.get('SELECT * FROM dialplan ORDER BY dpid, pr, id')); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/v1/dialplan/rules', async (req, res) => {
+  const b = req.body || {};
+  if (!b.match_exp) return res.status(400).json({ error: 'falta la expresión a buscar (match_exp)' });
+  try {
+    const r = await db.one(
+      'INSERT INTO dialplan (dpid, pr, match_op, match_exp, match_len, subst_exp, repl_exp, attrs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      [parseInt(b.dpid, 10) || 1, parseInt(b.pr, 10) || 0, b.match_op === 0 ? 0 : 1, String(b.match_exp),
+       parseInt(b.match_len, 10) || 0, b.subst_exp || '', b.repl_exp || '', b.attrs || '']);
+    res.status(201).json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.put('/api/v1/dialplan/rules/:id', async (req, res) => {
+  const b = req.body || {};
+  try {
+    const r = await db.one(
+      'UPDATE dialplan SET dpid=$1, pr=$2, match_op=$3, match_exp=$4, match_len=$5, subst_exp=$6, repl_exp=$7, attrs=$8 WHERE id=$9 RETURNING *',
+      [parseInt(b.dpid, 10) || 1, parseInt(b.pr, 10) || 0, b.match_op === 0 ? 0 : 1, String(b.match_exp || ''),
+       parseInt(b.match_len, 10) || 0, b.subst_exp || '', b.repl_exp || '', b.attrs || '', req.params.id]);
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/v1/dialplan/rules/:id', async (req, res) => {
+  try { await db.pool.query('DELETE FROM dialplan WHERE id=$1', [req.params.id]); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Recargar la tabla en Kamailio (sólo tiene efecto si el módulo dialplan está activo).
+app.post('/api/v1/dialplan/reload', async (req, res) => {
+  try { const out = await kam.rpc('dialplan.reload').catch((e) => ({ error: e.message })); res.json({ ok: !out || !out.error, out }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 /* ═══════════════ MEDIOS: rtpengine ══════════════════════════════════════════ */
@@ -1172,23 +1506,39 @@ app.put('/api/v1/engine/modules', async (req, res) => {
         'ON CONFLICT (id) DO UPDATE SET habilitado=EXCLUDED.habilitado, params=EXCLUDED.params, updated_at=now()',
         [m.id, !!m.habilitado, JSON.stringify(m.params || {})]);
     }
-    res.json({ ok: true, pendiente: 'aplicar para que el motor los tome' });
+    // topoh y topos son EXCLUYENTES. Además es una cuestión de correctitud: si topos
+    // manda, topoh no se carga, y un modparam("topoh",...) suelto tumbaría el arranque.
+    const tps = await db.one("SELECT habilitado FROM sbc_kam_modules WHERE id='topos'");
+    let ajuste = null;
+    if (tps && tps.habilitado) {
+      await db.pool.query("UPDATE sbc_kam_modules SET habilitado=false, updated_at=now() WHERE id='topoh'");
+      ajuste = 'topoh se apagó: es excluyente con topos';
+    }
+    res.json({ ok: true, ajuste, pendiente: 'aplicar para que el motor los tome' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/v1/engine/apply', async (req, res) => {
   const ruta = require('path').join(cfgen.DIR, 'modulos.cfg');
-  let previo = null;
+  const rutaTopo = require('path').join(cfgen.DIR, 'topo.mode');
+  let previo = null, previoTopo = null;
   try { previo = fsp.readFileSync(ruta, 'utf8'); } catch (_) {}
+  try { previoTopo = fsp.readFileSync(rutaTopo, 'utf8'); } catch (_) {}
+  const restaurarTopo = () => { try { if (previoTopo !== null) fsp.writeFileSync(rutaTopo, previoTopo); else fsp.unlinkSync(rutaTopo); } catch (_) {} };
 
   try {
     const filas = await db.get('SELECT * FROM sbc_kam_modules');
+    // Modo de ocultamiento de topología: lo decide el panel (topos gana sobre topoh).
+    const onTopos = filas.some((f) => f.id === 'topos' && f.habilitado);
+    const onTopoh = filas.some((f) => f.id === 'topoh' && f.habilitado);
+    cfgen.topoMode(onTopos ? 'topos' : (onTopoh ? 'topoh' : 'none'));
     cfgen.modulos(kamods.generar(filas));
 
     // 1) validar SIN tocar el motor que esta atendiendo
     const v = await motores.validarKamailio();
     if (!v.ok) {
       if (previo !== null) fsp.writeFileSync(ruta, previo); else { try { fsp.unlinkSync(ruta); } catch (_) {} }
+      restaurarTopo();
       return res.status(400).json({
         error: 'la configuracion no valida: no se toco nada',
         detalle: v.salida,
@@ -1203,6 +1553,7 @@ app.post('/api/v1/engine/apply', async (req, res) => {
       // 4) ROLLBACK: la config valido pero el motor no levanto (una tabla que falta,
       //    un puerto ocupado, lo que sea). Volvemos atras solos.
       if (previo !== null) fsp.writeFileSync(ruta, previo); else { try { fsp.unlinkSync(ruta); } catch (_) {} }
+      restaurarTopo();
       await motores.reiniciar('kamailio').catch(() => {});
       const revivio = await motores.esperarVivo(20);
       await db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'motor','crit',$1)",
@@ -1218,8 +1569,167 @@ app.post('/api/v1/engine/apply', async (req, res) => {
     res.json({ ok: true, validado: true });
   } catch (e) {
     if (previo !== null) { try { fsp.writeFileSync(ruta, previo); } catch (_) {} }
+    restaurarTopo();
     res.status(500).json({ error: e.message });
   }
+});
+
+/* ─────────────── Registrar del borde (#182) ───────────────
+ * El SBC termina el REGISTER y lo autentica por digest contra la tabla subscriber.
+ * Las cuentas SIP se crean acá (ha1 = MD5(user:realm:pass)); el realm es fijo por
+ * instalación. Aplicar regenera modulos.cfg + registrar.cfg, valida y recarga con
+ * rollback de AMBOS fragmentos. Apagado = el REGISTER se relaya a la central. */
+const _md5 = (s) => crypto.createHash('md5').update(s).digest('hex');
+async function _setting(k, def) {
+  try { const r = await db.pool.query('SELECT value FROM sbc_settings WHERE key=$1', [k]); return r.rows[0] ? r.rows[0].value : def; }
+  catch (_) { return def; }
+}
+async function _realm() {
+  return (await _setting('registrar_realm', null)) || process.env.DOMAIN || process.env.PUBLIC_IP || 'sbc';
+}
+async function _multiflujo() { return (await _setting('registrar_multiflujo', '0')) === '1'; }
+/* El secreto con el que se firman los flow tokens de RFC 5626. Tiene que ser ESTABLE:
+ * si cambia, los flujos ya registrados dejan de validar y los teléfonos quedan mudos
+ * hasta que re-registran. Por eso se genera una sola vez y se guarda. */
+async function _flowSecret() {
+  let s = await _setting('registrar_flow_secret', null);
+  if (!s) {
+    s = require('crypto').randomBytes(24).toString('hex');
+    await db.pool.query("INSERT INTO sbc_settings (key,value) VALUES ('registrar_flow_secret',$1) ON CONFLICT (key) DO NOTHING", [s]);
+    s = await _setting('registrar_flow_secret', s);
+  }
+  return s;
+}
+
+app.get('/api/v1/registrar', async (req, res) => {
+  try {
+    const mod = await db.one("SELECT habilitado FROM sbc_kam_modules WHERE id='registrar'");
+    const cuentas = await db.one('SELECT count(*)::int AS n FROM sbc_edge_accounts');
+    res.json({ on: !!(mod && mod.habilitado), realm: await _realm(), multiflujo: await _multiflujo(), cuentas: (cuentas && cuentas.n) || 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/v1/registrar', async (req, res) => {
+  const on = !!(req.body && req.body.on);
+  const realm = String((req.body && req.body.realm) || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 120);
+  try {
+    if (realm) await db.pool.query("INSERT INTO sbc_settings (key,value) VALUES ('registrar_realm',$1) ON CONFLICT (key) DO UPDATE SET value=$1", [realm]);
+    if (req.body && req.body.multiflujo !== undefined) {
+      await db.pool.query("INSERT INTO sbc_settings (key,value) VALUES ('registrar_multiflujo',$1) ON CONFLICT (key) DO UPDATE SET value=$1",
+        [req.body.multiflujo ? '1' : '0']);
+    }
+    await db.pool.query(
+      "INSERT INTO sbc_kam_modules (id, habilitado, params, updated_at) VALUES ('registrar',$1,'{}', now()) " +
+      'ON CONFLICT (id) DO UPDATE SET habilitado=EXCLUDED.habilitado, updated_at=now()', [on]);
+    res.json({ ok: true, pendiente: 'aplicar para que el motor lo tome' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/v1/registrar/apply', async (req, res) => {
+  const rutaMods = require('path').join(cfgen.DIR, 'modulos.cfg');
+  const rutaReg = require('path').join(cfgen.DIR, 'registrar.cfg');
+  let prevMods = null, prevReg = null;
+  try { prevMods = fsp.readFileSync(rutaMods, 'utf8'); } catch (_) {}
+  try { prevReg = fsp.readFileSync(rutaReg, 'utf8'); } catch (_) {}
+  const restaurar = () => {
+    if (prevMods !== null) fsp.writeFileSync(rutaMods, prevMods); else { try { fsp.unlinkSync(rutaMods); } catch (_) {} }
+    if (prevReg !== null) fsp.writeFileSync(rutaReg, prevReg); else { try { fsp.unlinkSync(rutaReg); } catch (_) {} }
+  };
+  try {
+    const mod = await db.one("SELECT habilitado FROM sbc_kam_modules WHERE id='registrar'");
+    const on = !!(mod && mod.habilitado);
+    const filas = await db.get('SELECT * FROM sbc_kam_modules');
+    cfgen.modulos(kamods.generar(filas));
+    const mf = await _multiflujo();
+    cfgen.registrarCfg(on, await _realm(), mf, mf ? await _flowSecret() : null);
+
+    const v = await motores.validarKamailio();
+    if (!v.ok) { restaurar(); return res.status(400).json({ error: 'la configuración no valida: no se tocó nada', detalle: v.salida }); }
+    await motores.reiniciar('kamailio');
+    const vivo = await motores.esperarVivo(15);
+    if (!vivo) {
+      restaurar();
+      await motores.reiniciar('kamailio').catch(() => {});
+      const revivio = await motores.esperarVivo(20);
+      return res.status(500).json({ error: 'el motor no levantó: se volvió a la anterior', rollback: true, recuperado: revivio });
+    }
+    await db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'motor','info',$1)",
+      [JSON.stringify({ registrar: on ? 'on' : 'off', multiflujo: mf })]);
+    res.json({ ok: true, on, multiflujo: mf });
+  } catch (e) { restaurar(); res.status(500).json({ error: e.message }); }
+});
+
+// Cuentas SIP del borde: alta con clave (calcula ha1), lista y baja.
+app.get('/api/v1/registrar/accounts', async (req, res) => {
+  try {
+    const filas = await db.get(
+      `SELECT a.username, a.domain, a.descripcion, a.habilitado, a.created_at,
+              (s.ha1 <> '') AS tiene_clave
+         FROM sbc_edge_accounts a LEFT JOIN subscriber s
+           ON s.username=a.username AND s.domain=a.domain
+        ORDER BY a.username`);
+    res.json(filas);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/v1/registrar/accounts', async (req, res) => {
+  const username = String((req.body && req.body.username) || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 64);
+  const password = String((req.body && req.body.password) || '');
+  const descripcion = (req.body && req.body.descripcion) || null;
+  if (!username) return res.status(400).json({ error: 'usuario inválido' });
+  if (password.length < 4) return res.status(400).json({ error: 'la clave debe tener al menos 4 caracteres' });
+  const realm = await _realm();
+  const ha1 = _md5(`${username}:${realm}:${password}`);
+  const ha1b = _md5(`${username}@${realm}:${realm}:${password}`);
+  const c = await db.pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query(
+      `INSERT INTO subscriber (username, domain, password, ha1, ha1b) VALUES ($1,'','',$2,$3)
+       ON CONFLICT (username, domain) DO UPDATE SET ha1=EXCLUDED.ha1, ha1b=EXCLUDED.ha1b`,
+      [username, ha1, ha1b]);
+    await c.query(
+      `INSERT INTO sbc_edge_accounts (username, domain, descripcion) VALUES ($1,'',$2)
+       ON CONFLICT (username, domain) DO UPDATE SET descripcion=EXCLUDED.descripcion, habilitado=true`,
+      [username, descripcion]);
+    await c.query('COMMIT');
+    res.json({ ok: true, username });
+  } catch (e) { await c.query('ROLLBACK').catch(() => {}); res.status(500).json({ error: e.message }); }
+  finally { c.release(); }
+});
+
+app.delete('/api/v1/registrar/accounts/:username', async (req, res) => {
+  const username = String(req.params.username || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 64);
+  if (!username) return res.status(400).json({ error: 'usuario inválido' });
+  try {
+    await db.pool.query('DELETE FROM subscriber WHERE username=$1', [username]);
+    await db.pool.query('DELETE FROM sbc_edge_accounts WHERE username=$1', [username]);
+    // si estaba registrado, soltarlo del usrloc en vivo (mejor esfuerzo)
+    try { await kam.rpc('ul.rm', ['location', `${username}@${await _realm()}`]); } catch (_) {}
+    res.json({ ok: true, username });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Registros vivos en el borde (usrloc, por RPC). Devuelve algo simple para la UI.
+app.get('/api/v1/registrar/online', async (req, res) => {
+  try {
+    const dump = await kam.registrations();
+    const out = [];
+    const rs = (dump && (dump.Domains || dump.domains)) || [];
+    for (const d of rs) {
+      const info = d.Domain || d;
+      const aors = (info && (info.AoRs || info.aors)) || [];
+      for (const a of aors) {
+        const rec = a.Info || a;
+        const contacts = (rec && (rec.Contacts || rec.contacts)) || [];
+        for (const cc of contacts) {
+          const ci = cc.Contact || cc;
+          out.push({ aor: rec.AoR || rec.aor || '', contact: ci.Address || ci.address || '', expires: ci.Expires || ci.expires, ua: ci['User-Agent'] || ci.user_agent || '', received: ci.Received || ci.received || '' });
+        }
+      }
+    }
+    res.json(out);
+  } catch (e) { res.json([]); }
 });
 
 /* ─────────────── STIR/SHAKEN (secsipid) ─────────────── */
@@ -1533,6 +2043,8 @@ app.post('/api/v1/auth/login', async (req, res) => {
   if (!u || !bcrypt.compareSync(password || '', u.password)) {
     return res.status(401).json({ error: 'usuario o contraseña incorrectos' });
   }
+  if (u.activo === false) return res.status(403).json({ error: 'usuario suspendido: pedile a un administrador que lo reactive' });
+  db.pool.query('UPDATE sbc_users SET last_login=now() WHERE id=$1', [u.id]).catch(() => {});
   const token = jwt.sign({ id: u.id, username: u.username, role: u.role, tenant_id: 1 },
     await secretoJwt(), { expiresIn: '12h' });
   res.json({ token, user: { username: u.username, role: u.role } });
@@ -1542,6 +2054,217 @@ app.post('/api/v1/auth/login', async (req, res) => {
 app.get('/api/v1/auth/me', (req, res) => {
   if (!req.auth || req.auth.tipo !== 'panel') return res.status(401).json({ error: 'sesión de panel requerida' });
   res.json({ user: { username: req.auth.username, role: req.auth.role } });
+});
+
+/* ─────────────── panel: usuarios (sólo admin) ───────────────
+ *
+ * Tres roles: admin (todo, incluye gestionar usuarios), operador (opera el borde) y
+ * lector (sólo mira). El alta/baja/edición la hace un admin desde el panel; ya no hay
+ * que entrar por SSH ni quedarse con un único usuario del primer arranque. No se puede
+ * dejar el sistema sin ningún admin activo, ni borrarse a uno mismo. */
+const ROLES_USUARIO = ['admin', 'operador', 'lector'];
+const soloAdmin = (req, res, next) => {
+  if (!req.auth || req.auth.tipo !== 'panel') return res.status(401).json({ error: 'sesión de panel requerida' });
+  if (req.auth.role !== 'admin') return res.status(403).json({ error: 'esta acción requiere rol administrador' });
+  next();
+};
+
+app.get('/api/v1/users', soloAdmin, async (req, res) => {
+  try {
+    const rows = await db.get('SELECT id, username, nombre, role, activo, created_at, last_login FROM sbc_users ORDER BY id');
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/v1/users', soloAdmin, async (req, res) => {
+  const { username, password, role, nombre } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: 'usuario y contraseña son obligatorios' });
+  if (String(password).length < 8) return res.status(400).json({ error: 'la contraseña debe tener al menos 8 caracteres' });
+  const rol = ROLES_USUARIO.includes(role) ? role : 'lector';
+  try {
+    const u = await db.one('INSERT INTO sbc_users (username, password, role, nombre, activo) VALUES ($1,$2,$3,$4,true) RETURNING id, username, nombre, role, activo, created_at, last_login',
+      [username, bcrypt.hashSync(String(password), 10), rol, nombre || null]);
+    await db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'user','info',$1)",
+      [JSON.stringify({ accion: 'alta', username, role: rol, por: req.auth.username })]);
+    res.status(201).json(u);
+  } catch (e) {
+    if (e.code === '23505' || String(e.message).includes('duplicate')) return res.status(409).json({ error: 'ya existe un usuario con ese nombre' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/v1/users/:id', soloAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { role, nombre, activo, password } = req.body || {};
+  try {
+    const u = await db.one('SELECT * FROM sbc_users WHERE id=$1', [id]);
+    if (!u) return res.status(404).json({ error: 'usuario no encontrado' });
+    const rol = role !== undefined ? (ROLES_USUARIO.includes(role) ? role : u.role) : u.role;
+    const act = activo !== undefined ? !!activo : u.activo;
+    if (u.role === 'admin' && (rol !== 'admin' || !act)) {
+      const otros = await db.one("SELECT count(*)::int AS n FROM sbc_users WHERE role='admin' AND activo=true AND id<>$1", [id]);
+      if (!otros || otros.n === 0) return res.status(400).json({ error: 'no podés dejar el sistema sin ningún administrador activo' });
+    }
+    if (password) {
+      if (String(password).length < 8) return res.status(400).json({ error: 'la contraseña debe tener al menos 8 caracteres' });
+      await db.pool.query('UPDATE sbc_users SET password=$1 WHERE id=$2', [bcrypt.hashSync(String(password), 10), id]);
+    }
+    const r = await db.one('UPDATE sbc_users SET role=$1, nombre=$2, activo=$3 WHERE id=$4 RETURNING id, username, nombre, role, activo, created_at, last_login',
+      [rol, nombre !== undefined ? (nombre || null) : u.nombre, act, id]);
+    await db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'user','info',$1)",
+      [JSON.stringify({ accion: 'edita', username: u.username, por: req.auth.username })]);
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/v1/users/:id', soloAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  try {
+    const u = await db.one('SELECT * FROM sbc_users WHERE id=$1', [id]);
+    if (!u) return res.status(404).json({ error: 'usuario no encontrado' });
+    if (req.auth.id === id) return res.status(400).json({ error: 'no podés borrar tu propio usuario' });
+    if (u.role === 'admin') {
+      const otros = await db.one("SELECT count(*)::int AS n FROM sbc_users WHERE role='admin' AND activo=true AND id<>$1", [id]);
+      if (!otros || otros.n === 0) return res.status(400).json({ error: 'es el único administrador activo; no se puede borrar' });
+    }
+    await db.pool.query('DELETE FROM sbc_users WHERE id=$1', [id]);
+    await db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'user','warn',$1)",
+      [JSON.stringify({ accion: 'baja', username: u.username, por: req.auth.username })]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Cambiar la propia contraseña (cualquier usuario logueado del panel).
+app.post('/api/v1/me/password', async (req, res) => {
+  if (!req.auth || req.auth.tipo !== 'panel') return res.status(401).json({ error: 'sesión de panel requerida' });
+  const { actual, nueva } = req.body || {};
+  if (!nueva || String(nueva).length < 8) return res.status(400).json({ error: 'la contraseña nueva debe tener al menos 8 caracteres' });
+  try {
+    const u = await db.one('SELECT * FROM sbc_users WHERE id=$1', [req.auth.id]);
+    if (!u || !bcrypt.compareSync(actual || '', u.password)) return res.status(401).json({ error: 'la contraseña actual no coincide' });
+    await db.pool.query('UPDATE sbc_users SET password=$1 WHERE id=$2', [bcrypt.hashSync(String(nueva), 10), req.auth.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ─────────────── ACME / Let's Encrypt ───────────────
+ * Certificado TLS propio del appliance SIN proxy adelante (panel HTTPS, SIP/TLS, WSS).
+ * HTTP-01 (puerto 80 standalone) o DNS-01 (API del DNS). Sólo admin. */
+app.get('/api/v1/acme', soloAdmin, async (req, res) => {
+  try { res.json({ config: acme.configPublica(), cert: await acme.estadoCert() }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/v1/acme/config', soloAdmin, async (req, res) => {
+  const { domain, email, method, dns_provider, dns_creds } = req.body || {};
+  const cfg = {};
+  if (domain !== undefined) cfg.domain = String(domain || '').trim();
+  if (email !== undefined) cfg.email = String(email || '').trim();
+  if (method !== undefined) cfg.method = (method === 'dns' ? 'dns' : 'http');
+  if (dns_provider !== undefined) cfg.dns_provider = String(dns_provider || '');
+  if (dns_creds && typeof dns_creds === 'object') cfg.dns_creds = dns_creds;
+  try { acme.guardarCfg(cfg); res.json({ ok: true, config: acme.configPublica() }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/v1/acme/issue', soloAdmin, async (req, res) => {
+  try {
+    const r = await acme.emitir();
+    db.pool.query("INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'acme',$1,$2)",
+      [r.ok ? 'info' : 'warn', JSON.stringify({ accion: 'emitir', ok: !!r.ok, cn: r.cn || null, por: req.auth.username })]).catch(() => {});
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/v1/acme/renew', soloAdmin, async (req, res) => {
+  try { res.json(await acme.renovar()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Auto-renovación: 1 vez/día, sólo si ya hay un cert emitido (acme.sh no renueva si falta mucho).
+setInterval(() => { acme.estadoCert().then((st) => { if (st.emitido) acme.renovar().catch(() => {}); }).catch(() => {}); }, 24 * 3600 * 1000);
+
+/* ─────────────── troncal: números (DIDs) ───────────────
+ *
+ * El pool de números que el operador te asignó. Cada número puede ser el CallerID de
+ * salida por defecto (uno solo por troncal) y/o rutear su llamada ENTRANTE a un destino.
+ * Al tocar algo acá conviene "Aplicar ruteo" para que el CallerID por defecto entre en vigencia. */
+app.get('/api/v1/trunks/:id/numbers', async (req, res) => {
+  try {
+    const rows = await db.get('SELECT * FROM sbc_trunk_numbers WHERE trunk_id=$1 AND tenant_id=$2 ORDER BY es_cid_default DESC, id',
+      [parseInt(req.params.id, 10), tenant(req)]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/v1/trunks/:id/numbers', async (req, res) => {
+  const trunkId = parseInt(req.params.id, 10);
+  const b = req.body || {};
+  const num = String(b.number || '').trim();
+  if (!num) return res.status(400).json({ error: 'el número es obligatorio' });
+  try {
+    if (b.es_cid_default) await db.pool.query('UPDATE sbc_trunk_numbers SET es_cid_default=false WHERE trunk_id=$1', [trunkId]);
+    const r = await db.one(
+      `INSERT INTO sbc_trunk_numbers (tenant_id, trunk_id, number, label, es_cid_default, inbound_dest, enabled)
+       VALUES ($1,$2,$3,$4,$5,$6,true) RETURNING *`,
+      [tenant(req), trunkId, num, b.label || null, !!b.es_cid_default, b.inbound_dest || null]);
+    res.status(201).json(r);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'ese número ya está en la troncal' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/v1/trunk-numbers/:nid', async (req, res) => {
+  const nid = parseInt(req.params.nid, 10);
+  const b = req.body || {};
+  try {
+    const n = await db.one('SELECT * FROM sbc_trunk_numbers WHERE id=$1', [nid]);
+    if (!n) return res.status(404).json({ error: 'número no encontrado' });
+    if (b.es_cid_default) await db.pool.query('UPDATE sbc_trunk_numbers SET es_cid_default=false WHERE trunk_id=$1 AND id<>$2', [n.trunk_id, nid]);
+    const r = await db.one(
+      `UPDATE sbc_trunk_numbers SET number=$1, label=$2, es_cid_default=$3, inbound_dest=$4, enabled=$5 WHERE id=$6 RETURNING *`,
+      [b.number != null ? String(b.number).trim() : n.number,
+       b.label !== undefined ? (b.label || null) : n.label,
+       b.es_cid_default !== undefined ? !!b.es_cid_default : n.es_cid_default,
+       b.inbound_dest !== undefined ? (b.inbound_dest || null) : n.inbound_dest,
+       b.enabled !== undefined ? !!b.enabled : n.enabled, nid]);
+    res.json(r);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'ese número ya está en la troncal' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/v1/trunk-numbers/:nid', async (req, res) => {
+  try { await db.pool.query('DELETE FROM sbc_trunk_numbers WHERE id=$1', [parseInt(req.params.nid, 10)]); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* Aplicar los DIDs al motor: regenera dids.cfg con los números que tienen destino,
+ * valida, recarga y hace rollback solo si algo sale mal. El CallerID de salida no
+ * pasa por acá: ese va por drouting (ruteo.aplicar), que recarga sin reiniciar. */
+app.post('/api/v1/trunk-numbers/apply', async (req, res) => {
+  const ruta = require('path').join(cfgen.DIR, 'dids.cfg');
+  let previo = null;
+  try { previo = fsp.readFileSync(ruta, 'utf8'); } catch (_) {}
+  const restaurar = () => { try { if (previo !== null) fsp.writeFileSync(ruta, previo); else fsp.unlinkSync(ruta); } catch (_) {} };
+  try {
+    const filas = await db.get(
+      `SELECT number, inbound_dest FROM sbc_trunk_numbers
+        WHERE tenant_id=$1 AND enabled AND inbound_dest IS NOT NULL AND inbound_dest <> ''
+        ORDER BY id`, [tenant(req)]);
+    cfgen.didsCfg(filas);
+    const v = await motores.validarKamailio();
+    if (!v.ok) { restaurar(); return res.status(400).json({ error: 'la configuración no valida: no se tocó nada', detalle: v.salida }); }
+    await motores.reiniciar('kamailio');
+    const vivo = await motores.esperarVivo(15);
+    if (!vivo) {
+      restaurar();
+      await motores.reiniciar('kamailio').catch(() => {});
+      const revivio = await motores.esperarVivo(20);
+      return res.status(500).json({ error: 'el motor no levantó: se volvió a la anterior', rollback: true, recuperado: revivio });
+    }
+    // El CallerID por defecto vive en drouting/uac: se recarga sin reiniciar.
+    let lcr = null;
+    try { lcr = await ruteo.aplicar(tenant(req)); } catch (_) {}
+    res.json({ ok: true, dids: filas.length, lcr });
+  } catch (e) { restaurar(); res.status(500).json({ error: e.message }); }
 });
 
 /* ─────────────── arranque ─────────────── */

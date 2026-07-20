@@ -173,6 +173,75 @@ function modulos(texto) {
   return escribir('modulos.cfg', texto);
 }
 
+/* TLS nativo: el SBC hace su propio TLS (SIP/TLS 5061 + WSS 8443) con su certificado,
+ * para entornos SIN proxy. Va en la seccion global de la cfg (enable_tls, loadmodule tls,
+ * listen=tls). Vacio = detras de un proxy que termina TLS (llega ws/sip en claro). El
+ * cert y el tls.cfg los prepara el entrypoint (ACME si hay, si no autofirmado). */
+function tlsNative(nativo, publicIp) {
+  const ip = String(publicIp || '').replace(/[^0-9a-zA-Z.:_-]/g, '');
+  const L = ['# TLS nativo (SIP/TLS + WSS propio) · GENERADO POR SBC-NG — no editar a mano',
+    `#  ${new Date().toISOString()}`];
+  if (nativo) {
+    L.push('enable_tls=yes');
+    L.push('loadmodule "tls.so"');
+    L.push('modparam("tls", "config", "/etc/kamailio/tls.cfg")');
+    L.push(`listen=tls:0.0.0.0:5061${ip ? ' advertise ' + ip + ':5061' : ''}`);
+    L.push('listen=tls:0.0.0.0:8443');   // WSS nativo (WebRTC sin proxy)
+  } else {
+    L.push('# TLS nativo apagado: el proxy (NPM) termina TLS y reenvía ws/sip en claro al SBC');
+  }
+  return escribir('tls_native.cfg', L.join('\n') + '\n');
+}
+
+/* Geo-bloqueo por pais: define route[GEOBLOCK], que el request_route llama en el ingreso.
+ * Rechaza (403) y mete la IP en ipban -asi aparece con su bandera en el SOC- cuando el
+ * pais de la IP origen esta en la lista. OJO: geoip2_match SOLO existe si el modulo geoip2
+ * esta cargado; si esta apagado o la lista esta vacia, la route queda inerte (return) para
+ * que Kamailio arranque igual (una route vacia no compila). */
+function geoblock(paises, geoipOn, modo) {
+  const cc = (paises || [])
+    .map((c) => String(c).toUpperCase().replace(/[^A-Z]/g, ''))
+    .filter((c) => c.length === 2);
+  const allow = String(modo || 'block') === 'allow';   // allow = lista blanca (solo estos entran)
+  const L = [
+    '# ============================================================',
+    '#  Geo-bloqueo por pais · GENERADO POR SBC-NG — no editar a mano',
+    `#  ${new Date().toISOString()} · ${cc.length} pais(es) · modo ${allow ? 'LISTA BLANCA' : 'lista negra'} · geoip2 ${geoipOn ? 'ON' : 'OFF'}`,
+    '# ============================================================',
+    'route[GEOBLOCK] {',
+  ];
+  if (geoipOn && cc.length) {
+    const cond = cc.map((c) => `$var(gcc)=="${c}"`).join(' || ');
+    L.push('  if (src_ip==myself) return;');
+    L.push('  if (geoip2_match("$si", "src")) {');
+    L.push('    $var(gcc) = $gip2(src=>cc);');
+    if (allow) {
+      // Lista blanca: si el pais NO esta permitido, se bloquea. Los que geoip no resuelve
+      // se dejan pasar a proposito (evita lockout por una IP sin geo); el resto de defensas
+      // (pike/secfilter) sigue actuando sobre ellos.
+      L.push(`    if (!(${cond})) {`);
+      L.push('      xlog("L_NOTICE","SBC-NG geo lista-blanca: bloqueo si=$si pais=$var(gcc)\\n");');
+      L.push('      $sht(ipban=>$si) = 1;');
+      L.push('      sl_send_reply("403", "Country not allowed");');
+      L.push('      exit;');
+      L.push('    }');
+    } else {
+      L.push(`    if (${cond}) {`);
+      L.push('      xlog("L_NOTICE","SBC-NG geobloqueo si=$si pais=$var(gcc)\\n");');
+      L.push('      $sht(ipban=>$si) = 1;');
+      L.push('      sl_send_reply("403", "Blocked country");');
+      L.push('      exit;');
+      L.push('    }');
+    }
+    L.push('  }');
+  } else {
+    L.push('  # sin geo-bloqueo (geoip2 apagado o lista de paises vacia)');
+  }
+  L.push('  return;');
+  L.push('}');
+  return escribir('geoblock.cfg', L.join('\n') + '\n');
+}
+
 function stir(s) {
   s = s || {};
   const x5u = String(s.x5u || '').replace(/["\r\n]/g, '').trim();
@@ -203,4 +272,131 @@ function stir(s) {
   return escribir('stir.cfg', L.join('\n') + '\n');
 }
 
-module.exports = { media, turn, reglasSip, seguridad, modulos, stir, DIR };
+/* Registrar del borde (#182): el SBC termina el REGISTER y lo autentica por digest
+ * contra la tabla subscriber (auth_db). Mismo patrón que STIR: el fragmento define
+ * SBCNG_REGISTRAR y las rutas EDGE_REGISTER/EDGE_LOOKUP; kamailio.cfg las llama
+ * gated por #!ifdef. Apagado => fragmento inerte (sin define, sin rutas), así el
+ * borde arranca y se comporta EXACTO como hoy (relay del REGISTER a la central). */
+function registrarCfg(on, realm, multiflujo, flowSecret) {
+  const r = String(realm || '').replace(/["\r\n\\]/g, '').trim() || 'sbc';
+  const mf = on && !!multiflujo;
+  const sec = String(flowSecret || '').replace(/[^0-9a-fA-F]/g, '').slice(0, 64) || '';
+  const L = ['# ============================================================',
+             '#  Registrar del borde · GENERADO POR SBC-NG — no editar a mano',
+             `#  ${new Date().toISOString()} · ${on ? 'ON realm=' + r + (mf ? ' multiflujo=ON' : '') : 'OFF'}`,
+             '# ============================================================'];
+  if (on) {
+    L.push('#!define SBCNG_REGISTRAR');
+    L.push('');
+    if (mf) {
+      /* RFC 5626 (SIP Outbound). Sin esto, cada REGISTER nuevo pisa el contacto anterior:
+       * el celular que pasa de wifi a datos deja de recibir llamadas hasta el próximo
+       * registro. Con esto, el mismo interno sostiene varios flujos a la vez y el borde
+       * elige el que esté vivo.
+       *   outbound        Da los flow tokens y hace que registrar entienda reg-id y
+       *                   +sip.instance (los identificadores que distinguen un flujo de otro).
+       *   use_path        RFC 3327: guarda la ruta de vuelta de cada flujo.
+       *   matching_mode 1 Compara por contacto + Call-ID, para no confundir dos flujos
+       *                   del mismo teléfono.
+       * El módulo va ANTES de usarse; el orden importa (ver la nota en kamods.js). */
+      L.push('loadmodule "outbound.so"');
+      if (sec) L.push(`modparam("outbound", "flow_token_secret", "${sec}")`);
+      L.push('modparam("registrar", "use_path", 1)');
+      L.push('modparam("registrar", "path_mode", 0)');
+      L.push('modparam("registrar", "path_use_received", 1)');
+      L.push('modparam("usrloc", "matching_mode", 1)');
+      L.push('#!define SBCNG_MULTIFLUJO');
+      L.push('');
+    }
+    L.push('# Termina el REGISTER en el borde: autentica por digest y guarda la ubicación.');
+    L.push('route[EDGE_REGISTER] {');
+    L.push('  if (!is_method("REGISTER")) return;');
+    L.push(`  if (!www_authenticate("${r}", "subscriber")) {`);
+    L.push(`    www_challenge("${r}", "0");`);
+    L.push('    exit;');
+    L.push('  }');
+    L.push('  # detrás de NAT / WebRTC: anclamos el alias para poder volver a entrar al teléfono');
+    L.push('  if (nat_uac_test("19") || proto==WS || proto==WSS) set_contact_alias();');
+    // 0x04 = guardar el Path del flujo junto con el contacto. Sólo tiene sentido con
+    // multiflujo: es la ruta por la que hay que volver a entrar a ESE flujo.
+    L.push(mf ? '  if (!save("location", "0x04")) sl_reply_error();'
+              : '  if (!save("location")) sl_reply_error();');
+    L.push('  exit;');
+    L.push('}');
+    L.push('');
+    L.push('# Entrega a un teléfono registrado en el borde (si no está, sigue el ruteo normal).');
+    L.push('route[EDGE_LOOKUP] {');
+    L.push('  if (!is_method("INVITE")) return;');
+    L.push('  if (!lookup("location")) return;');
+    L.push('  handle_ruri_alias();');
+    L.push('  xlog("L_INFO","SBC-NG edge lookup -> $ru\\n");');
+    L.push('  record_route();');
+    L.push('  rtpengine_manage("trust-address replace-origin replace-session-connection");');
+    L.push('  route(RELAY);');
+    L.push('  exit;');
+    L.push('}');
+  } else {
+    L.push('# registrar del borde apagado — el REGISTER se relaya a la central, como siempre');
+  }
+  return escribir('registrar.cfg', L.join('\n') + '\n');
+}
+
+/* Ruteo de DIDs entrantes (#159): "cuando ENTRA una llamada a este número, mandala acá".
+ * Cada número de /numeros puede tener un destino:
+ *   - un interno ("1001")      -> reescribe el usuario y sigue hacia la central de siempre
+ *   - una URI ("sip:x@host")   -> se entrega directo a esa URI, sin pasar por la central
+ * Sin números con destino, el fragmento queda inerte y todo entra como hasta ahora. */
+function didsCfg(filas) {
+  const rows = (filas || [])
+    .filter((r) => r && r.number && r.inbound_dest)
+    .map((r) => ({
+      num: String(r.number).replace(/["\r\n\\]/g, '').trim(),
+      dst: String(r.inbound_dest).replace(/["\r\n\\]/g, '').trim(),
+    }))
+    .filter((r) => r.num && r.dst);
+  const L = ['# ============================================================',
+             '#  DIDs entrantes · GENERADO POR SBC-NG — no editar a mano',
+             `#  ${new Date().toISOString()} · ${rows.length} número(s) con destino`,
+             '# ============================================================'];
+  if (rows.length) {
+    L.push('#!define SBCNG_DIDS');
+    L.push('');
+    L.push('route[DIDROUTE] {');
+    L.push('  if (!is_method("INVITE") || has_totag()) return;');
+    for (const r of rows) {
+      const uri = /^sips?:/i.test(r.dst);
+      L.push(`  if ($rU == "${r.num}") {`);
+      if (uri) {
+        L.push(`    xlog("L_INFO","SBC-NG DID ${r.num} -> ${r.dst}\\n");`);
+        L.push(`    $ru = "${r.dst}";`);
+        L.push('    record_route();');
+        L.push('    rtpengine_manage("trust-address replace-origin replace-session-connection RTP/AVP");');
+        L.push('    route(RELAY);');
+        L.push('    exit;');
+      } else {
+        L.push(`    xlog("L_INFO","SBC-NG DID ${r.num} -> interno ${r.dst}\\n");`);
+        L.push(`    $rU = "${r.dst}";`);
+        L.push('    return;');
+      }
+      L.push('  }');
+    }
+    L.push('  return;');
+    L.push('}');
+  } else {
+    L.push('# sin DIDs con destino: todo entra a la central por defecto');
+  }
+  return escribir('dids.cfg', L.join('\n') + '\n');
+}
+
+/* Ocultamiento de topología: topoh (cifra cabeceras) y topos (las guarda y las quita)
+ * son EXCLUYENTES. topoh se carga en la cfg base gateado por un #!define que pone el
+ * entrypoint; para que la decisión sea del PANEL y no del .env, dejamos el modo en un
+ * archivo del volumen compartido y el entrypoint lo respeta (env como fallback).
+ *   'topoh' -> carga topoh   ·   'topos' -> NO carga topoh (lo hace topos por módulo)
+ *   'none'  -> ninguno                                                              */
+function topoMode(modo) {
+  const m = ['topoh', 'topos', 'none'].includes(String(modo)) ? String(modo) : 'topoh';
+  return escribir('topo.mode', m + '\n');
+}
+
+module.exports = { media, turn, reglasSip, seguridad, modulos, stir, geoblock, tlsNative, registrarCfg, topoMode, didsCfg, DIR };

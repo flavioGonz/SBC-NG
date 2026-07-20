@@ -14,7 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get update && apt-get install -y --no-install-recommends \
       kamailio kamailio-postgres-modules kamailio-tls-modules kamailio-websocket-modules \
       kamailio-presence-modules kamailio-json-modules kamailio-utils-modules kamailio-extra-modules \
-      kamailio-secsipid-modules \
+      kamailio-secsipid-modules kamailio-geoip2-modules \
+      kamailio-outbound-modules \
     && rm -rf /var/lib/apt/lists/*
 
 COPY config/kamailio/ /etc/kamailio/
