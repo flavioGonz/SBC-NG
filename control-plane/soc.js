@@ -13,6 +13,32 @@
  * ==========================================================================*/
 const db = require('./db');
 const kam = require('./kamailio');
+const seglog = require('./seglog');
+
+/* ¿Estamos bajo ataque AHORA? Mira el buffer del registro en vivo (últimos 60 s) y
+ * cuenta los eventos de seguridad (flood/ban/escáner/rechazo/fraude). Si el ritmo
+ * supera el umbral, el panel prende la alarma "bajo ataque" con el ritmo y las IPs. */
+const ATAQUE_UMBRAL = 12;   // eventos de seguridad en 60 s para considerarlo ataque
+function detectarAtaque() {
+  const ahora = Date.now();
+  let rec = [];
+  try { rec = (seglog.recientes() || []).filter((e) => (ahora - e.t) <= 60000); } catch (_) {}
+  const rel = rec.filter((e) => ['flood', 'ban', 'secfilter', 'rechazo', 'fraude'].includes(e.tipo));
+  const cnt = {};
+  for (const e of rel) if (e.ip) cnt[e.ip] = (cnt[e.ip] || 0) + 1;
+  const ips = Object.keys(cnt);
+  const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+  const porTipo = {};
+  for (const e of rel) porTipo[e.tipo] = (porTipo[e.tipo] || 0) + 1;
+  return {
+    activo: rel.length >= ATAQUE_UMBRAL,
+    golpes_min: rel.length,
+    ips: ips.length,
+    top_ip: top ? top[0] : null,
+    top_ip_golpes: top ? top[1] : 0,
+    por_tipo: porTipo,
+  };
+}
 
 /* ── geoip por ip-api.com (gratis, batch de 100, con cache) ─────────────────
  *  Un appliance no puede depender de tener una MaxMind actualizada; ip-api resuelve
@@ -77,6 +103,13 @@ async function sincronizar() {
   const nuevas = ips.filter((ip) => !yaEsta.has(ip));
   const info = await geo([...new Set([...nuevas, ...ips.filter((ip) => sinCc.has(ip))])]);
 
+  // Países vetados (geo-bloqueo): si la IP viene de uno de estos, el motivo es "país no permitido".
+  let geoSet = new Set();
+  try { geoSet = new Set((await db.get('SELECT cc FROM sbc_geoblock')).map((r) => String(r.cc || '').toUpperCase())); } catch (_) {}
+  const REASON_GEO = 'país no permitido (geo-bloqueo)';
+  const REASON_FLOOD = 'anti-flood (pike/ipban)';
+  const motivoDe = (cc) => (cc && geoSet.has(String(cc).toUpperCase())) ? REASON_GEO : REASON_FLOOD;
+
   // backfill del cc que faltaba en filas viejas
   for (const ip of ips.filter((ip) => sinCc.has(ip))) {
     const g = info[ip] || {};
@@ -86,21 +119,36 @@ async function sincronizar() {
   let nuevos = 0;
   for (const ip of ips) {
     const g = info[ip] || {};
+    const reason = motivoDe(g.cc);
     const res = await db.pool.query(
       `INSERT INTO sbc_blocked (ip, reason, country, cc, isp, hits, blocked_at)
-       VALUES ($1, 'anti-flood (pike/ipban)', $2, $3, $4, 1, now())
+       VALUES ($1, $5, $2, $3, $4, 1, now())
        ON CONFLICT (ip) DO UPDATE SET
          country = COALESCE(sbc_blocked.country, EXCLUDED.country),
          cc = COALESCE(sbc_blocked.cc, EXCLUDED.cc),
          isp = COALESCE(sbc_blocked.isp, EXCLUDED.isp)
        RETURNING (xmax = 0) AS insertado`,
-      [ip, g.country || null, g.cc || null, g.isp || null]);
+      [ip, g.country || null, g.cc || null, g.isp || null, reason]);
     if (res.rows[0] && res.rows[0].insertado) {
       nuevos++;
       await db.pool.query(
         "INSERT INTO sbc_events (tenant_id, kind, severity, detail) VALUES (1,'bloqueo','warn',$1)",
-        [JSON.stringify({ ip, pais: g.country || '?', cc: g.cc || '', isp: g.isp || '', motivo: 'anti-flood' })]);
+        [JSON.stringify({ ip, pais: g.country || '?', cc: g.cc || '', isp: g.isp || '', motivo: reason })]);
     }
+  }
+
+  // Reetiqueta filas ya conocidas cuyo país entró (o salió) de la lista de geo-bloqueo,
+  // para que el motivo del SOC siga siempre coherente con la configuración vigente.
+  if (geoSet.size) {
+    const inList = [...geoSet];
+    await db.pool.query(
+      `UPDATE sbc_blocked SET reason=$1 WHERE upper(cc)=ANY($2) AND reason=$3`,
+      [REASON_GEO, inList, REASON_FLOOD]);
+    await db.pool.query(
+      `UPDATE sbc_blocked SET reason=$1 WHERE (cc IS NULL OR NOT (upper(cc)=ANY($2))) AND reason=$3`,
+      [REASON_FLOOD, inList, REASON_GEO]);
+  } else {
+    await db.pool.query(`UPDATE sbc_blocked SET reason=$1 WHERE reason=$2`, [REASON_FLOOD, REASON_GEO]);
   }
   return { nuevos, total: ips.length };
 }
@@ -140,6 +188,7 @@ async function resumen() {
     top_paises: topPaises,
     top_atacantes: topAtacantes,
     eventos,
+    ataque: detectarAtaque(),
   };
 }
 
