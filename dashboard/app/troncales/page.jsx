@@ -16,12 +16,13 @@ import {
 import {
   IconPlugConnected, IconPlus, IconLock, IconWorld, IconInfoCircle, IconPencil, IconTrash,
   IconAlertTriangle, IconShieldLock, IconCheck, IconX, IconStethoscope, IconRadar,
-  IconPhoneOutgoing, IconArrowRight, IconArrowLeft, IconWifi, IconTag, IconArrowsExchange, IconUser, IconKeyboard, IconMusic, IconScissors, IconPhoneCalling,
+  IconPhoneOutgoing, IconArrowRight, IconArrowLeft, IconWifi, IconTag, IconArrowsExchange, IconUser, IconKeyboard, IconMusic, IconScissors, IconPhoneCalling, IconHash,
 } from '@tabler/icons-react';
 import PageHeader from '../PageHeader';
 import { usePoll, api } from '../api';
 import { useMonitor, MonCell } from '../Mon';
 import { toast, toastPromise } from '../notify';
+import NumerosTroncal from '../../components/NumerosTroncal';
 
 const CODECS = [
   { value: 'ulaw', label: 'G.711 μ-law (ulaw)' },
@@ -67,6 +68,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default function Troncales() {
   const { data, cargando, recargar } = usePoll('/trunks', 12000);
+  const [numsFor, setNumsFor] = useState(null);   // troncal cuyo pool de números se está viendo
   const mon = useMonitor();
   const [abierto, setAbierto] = useState(false);
   const [f, setF] = useState(VACIO);
@@ -190,6 +192,7 @@ export default function Troncales() {
                     <Table.Td><Badge variant="light" color={t.enabled ? 'teal' : 'gray'}>{t.enabled ? 'activa' : 'inactiva'}</Badge></Table.Td>
                     <Table.Td>
                       <Group gap={2} wrap="nowrap">
+                        <Tooltip label="Números (DIDs)"><ActionIcon variant="subtle" color="cyan" onClick={() => setNumsFor(t)}><IconHash size={16} /></ActionIcon></Tooltip>
                         <Tooltip label="Editar"><ActionIcon variant="subtle" color="sbc" onClick={() => editar(t)}><IconPencil size={16} /></ActionIcon></Tooltip>
                         <Tooltip label="Borrar"><ActionIcon variant="subtle" color="red" onClick={() => borrar(t)}><IconTrash size={16} /></ActionIcon></Tooltip>
                       </Group>
@@ -210,6 +213,11 @@ export default function Troncales() {
           </Table>
         )}
       </Card>
+
+      <Modal opened={!!numsFor} onClose={() => setNumsFor(null)} size="52rem" radius="lg"
+             title={numsFor ? `Números · ${numsFor.name}` : ''}>
+        {numsFor && <NumerosTroncal trunkId={numsFor.id} trunkName={numsFor.name} />}
+      </Modal>
 
       <Modal opened={abierto} onClose={() => setAbierto(false)} size="60rem" radius="lg"
              title={

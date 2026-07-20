@@ -105,3 +105,5 @@ echo "    -d '{\"name\":\"Mi central\",\"sip_uri\":\"sip:192.168.1.10:5060\"}'"
 echo
 azul  "Y abrí los puertos: docs/FIREWALL.md"
 gris  "  (si abrís el 5060 pero no el rango RTP, la llamada entra y no se escucha nada)"
+gris  "  TLS: por defecto lo termina el proxy. Si activás 'TLS nativo' en Certificados,"
+gris  "  abrí ademas 5061/tcp (SIP/TLS) y 8443/tcp (WSS WebRTC)."

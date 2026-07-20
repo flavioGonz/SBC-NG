@@ -5,22 +5,37 @@
  *  proxy /backend) y entra con una animación sutil, como una consola viva.
  * ==========================================================================*/
 import { useEffect, useRef, useState } from 'react';
-import { Card, Group, Text, Badge, ActionIcon, Tooltip, ThemeIcon, Box } from '@mantine/core';
+import { Card, Group, Text, Badge, ActionIcon, Tooltip, ThemeIcon, Box, UnstyledButton } from '@mantine/core';
 import { IconBroadcast, IconPlayerPause, IconPlayerPlay, IconTrash, IconRadar2, IconShieldBolt } from '@tabler/icons-react';
 import { io } from 'socket.io-client';
 
 const COLOR = { crit: '#f04438', warn: '#f79009', info: '#2e90fa' };
 const TIPO = { ban: 'BAN', flood: 'FLOOD', secfilter: 'FILTRO', rechazo: 'RECHAZO', auth: 'AUTH', fraude: 'FRAUDE' };
+const TIPOS = [['ban', 'Bans'], ['flood', 'Flood'], ['secfilter', 'Escáneres'], ['rechazo', 'Rechazos'], ['auth', 'Auth'], ['fraude', 'Fraude']];
+const PILLCOLOR = { ban: 'red', flood: 'red', secfilter: 'orange', rechazo: 'blue', auth: 'orange', fraude: 'grape' };
 
 function hora(t) {
   const d = new Date(t);
   return d.toLocaleTimeString('es-UY', { hour12: false });
 }
 
+function Pill({ active, onClick, label, n, color = 'gray' }) {
+  return (
+    <UnstyledButton onClick={onClick}
+      style={{ borderRadius: 999, padding: '3px 11px', fontSize: 12, fontWeight: 600, lineHeight: 1.5,
+        border: `1px solid ${active ? `var(--mantine-color-${color}-4)` : 'var(--mantine-color-default-border)'}`,
+        background: active ? `var(--mantine-color-${color}-light)` : 'transparent',
+        color: active ? `var(--mantine-color-${color}-7)` : 'var(--mantine-color-dimmed)', transition: 'all .15s' }}>
+      {label} <span style={{ opacity: .55 }}>{n}</span>
+    </UnstyledButton>
+  );
+}
+
 export default function LiveLog() {
   const [lineas, setLineas] = useState([]);
   const [conectado, setConectado] = useState(false);
   const [pausa, setPausa] = useState(false);
+  const [filtro, setFiltro] = useState(null);
   const pausaRef = useRef(false); pausaRef.current = pausa;
   const cont = useRef(null);
   const finRef = useRef(null);
@@ -41,6 +56,9 @@ export default function LiveLog() {
     if (pausa || !finRef.current) return;
     finRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [lineas, pausa]);
+
+  const visibles = filtro ? lineas.filter((e) => e.tipo === filtro) : lineas;
+  const cuenta = (tp) => lineas.reduce((a, e) => a + (e.tipo === tp ? 1 : 0), 0);
 
   return (
     <Card p={0} withBorder radius="md" className="sbc-fade-in" style={{ overflow: 'hidden' }}>
@@ -81,16 +99,16 @@ export default function LiveLog() {
       <Box ref={cont} style={{ height: 300, overflowY: 'auto', padding: '8px 0',
                                background: 'light-dark(#fbfcfe, #0b0f16)',
                                fontFamily: 'var(--mantine-font-family-monospace, monospace)' }}>
-        {lineas.length === 0 && (
+        {visibles.length === 0 && (
           <Group justify="center" h="100%" style={{ minHeight: 260 }}>
             <div style={{ textAlign: 'center' }}>
               <ThemeIcon size={54} radius="xl" variant="light" color="gray" className="ll-live"><IconRadar2 size={30} /></ThemeIcon>
-              <Text size="sm" c="dimmed" mt="sm">Escuchando el borde…</Text>
-              <Text size="11px" c="dimmed">sin eventos de seguridad todavía — buena señal</Text>
+              <Text size="sm" c="dimmed" mt="sm">{filtro ? 'Sin eventos de este tipo.' : 'Escuchando el borde…'}</Text>
+              <Text size="11px" c="dimmed">{filtro ? 'Probá otro filtro.' : 'sin eventos de seguridad todavía — buena señal'}</Text>
             </div>
           </Group>
         )}
-        {lineas.map((e, i) => (
+        {visibles.map((e, i) => (
           <div key={e.t + '-' + i} className="ll-row"
                style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '3px 14px',
                         fontSize: 12.5, lineHeight: 1.5, borderLeft: `3px solid ${COLOR[e.sev] || '#667085'}` }}>
@@ -106,6 +124,17 @@ export default function LiveLog() {
         ))}
         <div ref={finRef} />
       </Box>
+
+      {/* filtros por tipo de ataque, en vivo */}
+      <Group gap={7} p="xs" px="md" wrap="wrap"
+             style={{ borderTop: '1px solid var(--mantine-color-default-border)',
+                      background: 'light-dark(#fbfcfe, #0b0f16)' }}>
+        <Pill active={!filtro} onClick={() => setFiltro(null)} label="Todos" n={lineas.length} color="gray" />
+        {TIPOS.map(([tp, lbl]) => (
+          <Pill key={tp} active={filtro === tp} onClick={() => setFiltro(filtro === tp ? null : tp)}
+                label={lbl} n={cuenta(tp)} color={PILLCOLOR[tp]} />
+        ))}
+      </Group>
     </Card>
   );
 }

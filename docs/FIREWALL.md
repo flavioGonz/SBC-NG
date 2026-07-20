@@ -9,12 +9,24 @@ conviene abrirlos todos de una y verificar.
 | Puerto | Protocolo | Para qué | ¿Obligatorio? |
 |---|---|---|---|
 | **5060** | UDP y TCP | SIP: troncales del operador y teléfonos remotos | Sí |
-| **5061** | TCP | SIP sobre TLS (si lo usás) | Opcional |
-| **8088** | TCP | WebSocket SIP (WebRTC). Normalmente lo publica el proxy con TLS en 443 | Sólo con WebRTC |
+| **8088** | TCP | WebSocket SIP en claro (modo *detrás de un proxy*: el proxy termina TLS y reenvía `ws`). Alcanza con que llegue **desde el proxy** | Con WebRTC vía proxy |
+| **5061** | TCP | **SIP sobre TLS (SIPS)** — sólo en modo *TLS nativo* (sin proxy) | Opcional (TLS nativo) |
+| **8443** | TCP | **WSS**: WebSocket SIP seguro — sólo en modo *TLS nativo* (WebRTC sin proxy) | Opcional (TLS nativo) |
 | **30000-40000** | UDP | **RTP**: el audio y el video de todas las llamadas | Sí |
 | **3478** | UDP y TCP | STUN/TURN | Sólo con WebRTC |
 | **49152-65535** | UDP | Relay del TURN | Sólo con WebRTC |
 | **3100** | TCP | Panel y API norte del SBC | Sí (o detrás de un proxy) |
+
+### Modo TLS: proxy vs nativo
+
+El modo se elige en el panel (*Certificados → Modo TLS del borde*) y define qué puertos abrir:
+
+- **Detrás de un proxy** (por defecto): un proxy inverso (NGINX/NPM) publica el HTTPS/WSS con el
+  certificado y le reenvía `ws`/`sip` en claro al SBC. **No abras 5061 ni 8443** — el TLS lo termina
+  el proxy.
+- **TLS nativo** (sin proxy): el SBC hace su propio TLS con el certificado de Let's Encrypt (o uno
+  autofirmado). Recién ahí abrís **5061** (SIP/TLS) y/o **8443** (WSS) si necesitás conexiones
+  **entrantes** desde internet. Si el SBC se registra saliente contra el operador, no hace falta.
 
 ## El error que se paga caro: el rango RTP
 

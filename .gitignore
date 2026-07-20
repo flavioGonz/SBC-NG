@@ -5,3 +5,6 @@ node_modules/
 data/
 captures/
 .probe
+/SBC-intro.mp4 
+*.key 
+*.pem 

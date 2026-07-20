@@ -42,7 +42,28 @@ fi
 
 DB_URL="postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
+# --- Topology Hiding: topoh (cifra cabeceras) vs topos (guarda estado) ---
+# Son EXCLUYENTES. El modo lo decide el PANEL (archivo topo.mode en el volumen
+# compartido); si el archivo no está, cae al env TOPOH de siempre.
+: "${TOPOH:=1}"
+TOPOH_KEY="${TOPOH_KEY:-$(printf '%s' "${SELF_IP}${PUBLIC_IP}sbcng-topoh" | sha1sum | awk '{print substr($1,1,16)}')}"
+TOPO_MODE=""
+if [ -f /etc/sbcng/topo.mode ]; then TOPO_MODE="$(tr -d '[:space:]' < /etc/sbcng/topo.mode)"; fi
+case "$TOPO_MODE" in
+  topos) TOPOH_DEFINE='# topoh apagado: el panel eligió topos'; echo "[SBC-NG] ocultamiento de topología: topos" ;;
+  none)  TOPOH_DEFINE='# ocultamiento de topología apagado desde el panel' ;;
+  topoh) TOPOH_DEFINE='#!define SBCNG_TOPOH'; echo "[SBC-NG] ocultamiento de topología: topoh" ;;
+  *)     if [ "$TOPOH" = "1" ]; then TOPOH_DEFINE='#!define SBCNG_TOPOH'; else TOPOH_DEFINE='# topoh deshabilitado (TOPOH=0)'; fi ;;
+esac
+
 cd /etc/kamailio
+# La cfg base se REGENERA del template en cada arranque. Sin esto, el sed sólo servía
+# la primera vez: al reiniciar el contenedor los @@TOKENS@@ ya estaban reemplazados y
+# un cambio de valor (p.ej. pasar de topoh a topos, o una IP pública nueva) no se
+# aplicaba nunca. El template se guarda en el primer arranque y no se toca más.
+if [ ! -f /etc/kamailio/kamailio.cfg.tpl ]; then cp /etc/kamailio/kamailio.cfg /etc/kamailio/kamailio.cfg.tpl; fi
+cp /etc/kamailio/kamailio.cfg.tpl /etc/kamailio/kamailio.cfg
+
 # El separador es | porque la DB_URL trae barras.
 sed -i \
   -e "s|@@DB_URL@@|${DB_URL}|g" \
@@ -50,6 +71,8 @@ sed -i \
   -e "s|@@PUBLIC_IP@@|${PUBLIC_IP}|g" \
   -e "s|@@TRUSTED_NET@@|${TRUSTED_NET}|g" \
   -e "s|@@METRICS_TOKEN@@|${METRICS_TOKEN}|g" \
+  -e "s|@@TOPOH_KEY@@|${TOPOH_KEY}|g" \
+  -e "s|@@TOPOH_DEFINE@@|${TOPOH_DEFINE}|g" \
   kamailio.cfg
 
 echo "[SBC-NG] self=${SELF_IP} publica=${PUBLIC_IP} confiable=${TRUSTED_NET}"
@@ -107,6 +130,70 @@ if [ -f /etc/sbcng/stir.cfg ]; then
   echo "[SBC-NG] STIR/SHAKEN configurado por el panel"
 else
   echo "# STIR/SHAKEN apagado (el panel no lo configuro)" > /etc/kamailio/stir.cfg
+fi
+
+# Geo-bloqueo por pais: define route[GEOBLOCK]. Si el panel no lo configuro, una route
+# inerte (return) para que el request_route pueda llamarla igual y Kamailio arranque.
+if [ -f /etc/sbcng/geoblock.cfg ]; then
+  cp /etc/sbcng/geoblock.cfg /etc/kamailio/geoblock.cfg
+  echo "[SBC-NG] geo-bloqueo del panel cargado"
+else
+  echo "route[GEOBLOCK] { return; }" > /etc/kamailio/geoblock.cfg
+fi
+
+# Registrar del borde (#182): el fragmento define SBCNG_REGISTRAR + rutas EDGE_* cuando
+# el panel lo activa. Si no, un comentario inerte: sin define, el #!ifdef del request_route
+# no compila nada y el borde relaya el REGISTER a la central, como siempre.
+if [ -f /etc/sbcng/registrar.cfg ]; then
+  cp /etc/sbcng/registrar.cfg /etc/kamailio/registrar.cfg
+  echo "[SBC-NG] registrar del borde cargado"
+else
+  echo "# registrar del borde apagado" > /etc/kamailio/registrar.cfg
+fi
+
+# DIDs entrantes: si el panel no configuró destinos, fragmento inerte.
+if [ -f /etc/sbcng/dids.cfg ]; then
+  cp /etc/sbcng/dids.cfg /etc/kamailio/dids.cfg
+  echo "[SBC-NG] ruteo de DIDs cargado"
+else
+  echo "# sin DIDs con destino" > /etc/kamailio/dids.cfg
+fi
+
+# ─── TLS nativo (opcional): el SBC puede correr DETRAS de un proxy (que termina TLS)
+# o SOLO, con su propio certificado (SIP/TLS 5061 + WSS 8443). Preparamos SIEMPRE el
+# cert y el tls.cfg; el fragmento tls_native.cfg (listen=tls + enable_tls) decide si de
+# verdad se abren los puertos. Cert: el de ACME si existe; si no, uno autofirmado (labs
+# o entornos sin dominio) para que TLS igual funcione. ───
+CERT_DIR=/etc/sbcng/certs
+if [ -f "$CERT_DIR/fullchain.pem" ] && [ -f "$CERT_DIR/key.pem" ]; then
+  TLS_CRT="$CERT_DIR/fullchain.pem"; TLS_KEY="$CERT_DIR/key.pem"
+  echo "[SBC-NG] TLS: certificado de ACME (Let's Encrypt)"
+else
+  mkdir -p /etc/kamailio/tls
+  if [ ! -f /etc/kamailio/tls/self.crt ]; then
+    openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+      -keyout /etc/kamailio/tls/self.key -out /etc/kamailio/tls/self.crt \
+      -subj "/CN=${PUBLIC_IP:-sbc-ng}" >/dev/null 2>&1 || true
+  fi
+  TLS_CRT=/etc/kamailio/tls/self.crt; TLS_KEY=/etc/kamailio/tls/self.key
+  echo "[SBC-NG] TLS: certificado autofirmado (todavía no hay cert de ACME)"
+fi
+cat > /etc/kamailio/tls.cfg <<TLSEOF
+[server:default]
+method = TLSv1.2+
+verify_certificate = no
+require_certificate = no
+private_key = $TLS_KEY
+certificate = $TLS_CRT
+[client:default]
+verify_certificate = no
+require_certificate = no
+TLSEOF
+if [ -f /etc/sbcng/tls_native.cfg ]; then
+  cp /etc/sbcng/tls_native.cfg /etc/kamailio/tls_native.cfg
+  echo "[SBC-NG] TLS nativo según el panel"
+else
+  echo "# TLS nativo apagado (el proxy termina TLS)" > /etc/kamailio/tls_native.cfg
 fi
 mkdir -p /tmp/secsipid
 

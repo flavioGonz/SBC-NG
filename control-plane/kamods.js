@@ -101,28 +101,111 @@ const MODULOS = [
     params: [
       { k: 'cfgtrace', tipo: 'int', def: 0, ayuda: '1 = trazar. Con esto prendido el log crece a ojos vista.' },
     ] },
+
+  /* ── interoperabilidad con operadores (del análisis de módulos) ─────────── */
+  { id: 'textopsx', nombre: 'Cabeceras avanzadas (textopsx)', grupo: 'Interoperabilidad',
+    detalle: 'Manipulación fina de cabeceras SIP que textops no cubre (append/insert/remove por posición). Se prende y se usa desde las reglas de manipulación.' },
+  { id: 'sdpops', nombre: 'Edición de SDP (sdpops)', grupo: 'Interoperabilidad',
+    detalle: 'Control de códecs y del cuerpo SDP a nivel config: quitar un códec que el operador rechaza, forzar un orden, limpiar atributos. Complementa al transcoding.' },
+  { id: 'uac_redirect', nombre: 'Seguir redirecciones 3xx (uac_redirect)', grupo: 'Interoperabilidad',
+    detalle: 'Cuando un operador contesta 301/302, el SBC sigue la nueva ubicacion en vez de fallar. Util con operadores que balancean por redireccion.' },
+
+  /* ── limites de tasa / anti-fraude (del análisis) ──────────────────────── */
+  { id: 'ratelimit', nombre: 'Limite de tasa (ratelimit)', grupo: 'Seguridad',
+    detalle: 'Limita el ritmo de mensajes por metodo (INVITE/REGISTER) con algoritmos de tasa. Sube el anti-DoS de "flood por IP" (pike) a "policy de tasa configurable".',
+    params: [
+      { k: 'timer_interval', tipo: 'int', def: 10, ayuda: 'Cada cuantos segundos recalcula la tasa. 10 es un buen punto de partida.' },
+    ] },
+  { id: 'pipelimit', nombre: 'Colas de tasa por nombre (pipelimit)', grupo: 'Seguridad',
+    detalle: 'Como ratelimit pero con "tuberias" nombradas: un tope por troncal o por cliente, no solo global. Se ata a una tuberia en las reglas.' },
+
+  /* ── integración con el panel/app (del análisis) ───────────────────────── */
+  { id: 'http_client', nombre: 'Llamadas HTTP desde el ruteo (http_client)', grupo: 'Integración',
+    detalle: 'Permite consultar una API (webhook, anti-fraude, decision de ruteo) desde la config de Kamailio. Encaja con "todo configurable desde el panel".',
+    params: [
+      { k: 'connection_timeout', tipo: 'int', def: 5, ayuda: 'Segundos maximos que espera una consulta HTTP antes de cortar (no colgar la llamada).' },
+    ] },
+  { id: 'jansson', nombre: 'JSON en la config (jansson)', grupo: 'Integración',
+    detalle: 'Arma y parsea JSON dentro del ruteo. Va de la mano de http_client para hablar con APIs modernas.' },
+
+  /* ── traducción de números (del análisis; usa base de datos) ─────────────── */
+  { id: 'dialplan', nombre: 'Traducción de números (dialplan)', grupo: 'Interoperabilidad', db: true,
+    detalle: 'Reescribe números por tabla (dpid) con expresiones regulares: normalizar a E.164, poner/sacar prefijos, mapear cortos. Las reglas se cargan en Conectividad → Traducción. OJO: para que actúe hay que llamar dp_translate() en el ruteo — se prueba con una llamada real.' },
+
+  /* ── ocultamiento de topología alternativo (del análisis de módulos) ─────── */
+  { id: 'topos', nombre: 'Ocultar topología por estado (topos)', grupo: 'Seguridad', db: true,
+    detalle: 'Alternativa a topoh: en vez de cifrar las cabeceras, las GUARDA en la base y las quita del mensaje, reponiéndolas cuando la respuesta vuelve por el diálogo. El otro lado no ve NADA de la red interna, ni siquiera un blob cifrado. Útil con operadores a los que el Via enmascarado de topoh les molesta.',
+    requiere: 'EXCLUYENTE con topoh: al activarlo, el panel apaga topoh solo. Guarda estado en las tablas topos_d/topos_t (ya migradas).',
+    params: [
+      { k: 'mask_callid', tipo: 'int', def: 0, ayuda: '1 = también enmascara el Call-ID. Más privacidad, pero complica correlacionar llamadas en el CDR y en la captura.' },
+      { k: 'clean_interval', tipo: 'int', def: 60, ayuda: 'Cada cuántos segundos limpia el estado viejo de las tablas.' },
+    ] },
+
+  /* ── el SBC como registrar de sus propios endpoints (del análisis) ───────── */
+  { id: 'registrar', nombre: 'Registrar propio (registrar)', grupo: 'Interoperabilidad', companions: ['usrloc', 'auth', 'auth_db'],
+    detalle: 'Deja que el SBC TERMINE los registros de los teléfonos/softphones en el borde (usrloc) y los autentique por digest contra credenciales locales (auth_db), en vez de reenviarlos a la central. Baja carga de REGISTER en la PBX y sobrevive a que la central se caiga.',
+    requiere: 'usrloc + auth + auth_db (se cargan solos) + cuentas SIP del borde y realm (se configuran en /registros). Cambia el modelo de registro: activar con intención.' },
+
+  /* ── señalización cifrada (del análisis; usa el cert de ACME) ────────────── */
+  { id: 'tls', nombre: 'SIP sobre TLS nativo (tls)', grupo: 'Seguridad', baseManaged: true,
+    detalle: 'Señalización SIP cifrada DIRECTA (SIPS, puerto 5061) contra un operador o teléfono que exija sips:. OJO: el TLS del panel y del WebRTC (WSS) NO pasa por acá — lo termina el NPM proxy con el cert de Let\'s Encrypt y reenvía ws plano al :8088. El módulo tls sólo hace falta para troncales/extensiones SIPS nativas, que hoy no usamos.',
+    requiere: 'Sólo si un operador pide SIPS nativo. Se activa en el DESPLIEGUE (listener tls:5061 + enable_tls + tls.cfg). El cert NO se re-emite en Kamailio: se le comparte el mismo que el NPM proxy ya renueva (por volumen). Sin operador que lo exija, dejar apagado.' },
+
+  /* ── geolocalización de IPs en el ruteo (del análisis) ───────────────────── */
+  { id: 'geoip2', nombre: 'GeoIP de la IP origen (geoip2)', grupo: 'Seguridad',
+    detalle: 'Resuelve el país de la IP que manda cada mensaje DENTRO del ruteo, para bloquear o priorizar por país en el borde (antes de tocar la central). Alimenta el bloqueo por país y la bandera de cada IP en el SOC.',
+    params: [
+      { k: 'path', tipo: 'str', def: '/etc/sbcng/geoip/country.mmdb', ayuda: 'Ruta a la base de geolocalización (.mmdb). Viene una base de país de db-ip; se puede reemplazar por GeoLite2 de MaxMind.' },
+    ] },
+
+  /* ── listas negras dirigidas por base (del análisis) ─────────────────────── */
+  { id: 'userblacklist', nombre: 'Listas negras por base (userblacklist)', grupo: 'Seguridad', db: true,
+    detalle: 'Bloquea números/destinos por tabla (global o por usuario) desde la base: complementa a secfilter (que filtra por User-Agent) con una lista de prefijos/destinos prohibidos.',
+    requiere: 'NO está empaquetado para Kamailio 6.1 (deb.kamailio.org no lo trae): habría que compilarlo de fuente. Mientras tanto, secfilter + la tabla address (permissions) cubren el bloqueo por IP/UA. Además necesitaría las tablas userblacklist/globalblacklist.' },
 ];
 
 const porId = Object.fromEntries(MODULOS.map((m) => [m.id, m]));
 const esNucleo = (id) => !!(porId[id] && porId[id].nucleo);
 
+// URL de Postgres tal como la ve Kamailio (red host → 127.0.0.1:5432, igual que la cfg base).
+// Se usa para los módulos con base de datos (db: true) al generar sus modparam db_url.
+function kamDbUrl() {
+  if (process.env.KAM_DB_URL) return process.env.KAM_DB_URL;
+  const u = process.env.DB_USER || 'sbcng';
+  const p = process.env.DB_PASS || '';
+  const d = process.env.DB_NAME || 'sbcng';
+  return `postgres://${u}:${p}@127.0.0.1:5432/${d}`;
+}
+
 /* Genera el fragmento que Kamailio importa: los loadmodule de lo que NO viene ya
  * cargado en el cfg base, y los modparam de todo lo configurado desde el panel. */
 function generar(estado) {
   // estado: [{ id, habilitado, params: {k: v} }]
+  // Módulos que la cfg BASE (kamailio.cfg) ya carga con loadmodule: NO se re-cargan acá.
+  // Kamailio 6.1 deduplica un loadmodule repetido, pero igual ensucia el fragmento y en
+  // otras versiones es fatal. topoh entra acá: la base lo carga gateado por env TOPOH
+  // (y le pone el mask_ip real por sed); el panel sólo ajusta sus modparam.
   const yaEnBase = ['tm', 'rr', 'dispatcher', 'permissions', 'rtpengine', 'nathelper',
-    'websocket', 'uac', 'drouting', 'dialog', 'sst', 'pike', 'secfilter', 'sanity', 'acc'];
+    'websocket', 'uac', 'drouting', 'dialog', 'sst', 'pike', 'secfilter', 'sanity', 'acc',
+    'topoh', 'htable', 'sqlops', 'secsipid'];
 
-  const cargas = [];
+  const cargas = new Set();
   const params = [];
+  const addLoad = (id) => { if (!yaEnBase.includes(id)) cargas.add(`loadmodule "${id}.so"`); };
 
   for (const e of estado) {
     const m = porId[e.id];
     if (!m) continue;
     const activo = m.nucleo || e.habilitado;
     if (!activo) continue;
+    if (m.baseManaged) continue;   // lo gobierna la cfg base (load + modparam), no el panel
 
-    if (!yaEnBase.includes(m.id)) cargas.push(`loadmodule "${m.id}.so"`);
+    // Compañeros PRIMERO: Kamailio inicializa en orden de carga y algunos módulos se
+    // enlazan a otro en su init (registrar→usrloc, auth_db→auth). Si el compañero va
+    // después, el init falla ("bind to usrloc before being initialized"). El -c no lo
+    // detecta (no corre ese init), pero el arranque real sí: por eso van antes.
+    for (const c of (m.companions || [])) addLoad(c);
+    addLoad(m.id);
 
     for (const p of (m.params || [])) {
       const v = (e.params && e.params[p.k] !== undefined && e.params[p.k] !== null && e.params[p.k] !== '')
@@ -131,6 +214,25 @@ function generar(estado) {
       params.push(p.tipo === 'int'
         ? `modparam("${m.id}", "${p.k}", ${parseInt(v, 10)})`
         : `modparam("${m.id}", "${p.k}", "${String(v).replace(/"/g, '\\"')}")`);
+    }
+    // Módulos con base de datos: el db_url no es un parámetro que el operador escriba,
+    // sale de la conexión real (db_postgres ya está cargado en la cfg base, no se re-carga).
+    if (m.db) params.push(`modparam("${m.id}", "db_url", "${kamDbUrl()}")`);
+
+    // Registrar del borde: usrloc + auth_db necesitan sus modparams fijos (no los toca
+    // el operador). usrloc en memoria (db_mode 0): las registraciones viven en RAM y el
+    // teléfono re-registra solo; no metemos escrituras en el camino caliente. auth_db usa
+    // la columna ha1 ya calculada (calculate_ha1=0) contra la tabla subscriber.
+    if (m.id === 'registrar') {
+      const dburl = kamDbUrl();
+      params.push(`modparam("usrloc", "db_url", "${dburl}")`);
+      params.push('modparam("usrloc", "db_mode", 0)');
+      params.push('modparam("usrloc", "use_domain", 0)');
+      params.push(`modparam("auth_db", "db_url", "${dburl}")`);
+      params.push('modparam("auth_db", "calculate_ha1", 0)');
+      params.push('modparam("auth_db", "password_column", "ha1")');
+      params.push('modparam("auth_db", "load_credentials", "")');
+      params.push('modparam("auth_db", "use_domain", 0)');
     }
   }
 

@@ -26,7 +26,7 @@ import { SkelFilas } from '../Skel';
 import { usePoll, api } from '../api';
 import { toast, toastPromise } from '../notify';
 
-const VACIA = { name: '', pattern: '', trunk_id: '', priority: 10 };
+const VACIA = { name: '', pattern: '', trunk_id: '', priority: 10, cid_number: '' };
 
 // Modos de ruteo a nivel de digitos, con ejemplos. El wizard arranca por aca.
 const MODOS = [
@@ -94,7 +94,7 @@ export default function Ruteo() {
   const abrirNueva = () => { setEditando(null); setF(VACIA); setPasoR(1); setAbierta(true); };
   const abrirEditar = (r) => {
     setEditando(r.id);
-    setF({ name: r.name || '', pattern: r.pattern || '', trunk_id: String(r.trunk_id || ''), priority: r.priority || 10 });
+    setF({ name: r.name || '', pattern: r.pattern || '', trunk_id: String(r.trunk_id || ''), priority: r.priority || 10, cid_number: r.cid_number || '' });
     setPasoR(2); setAbierta(true);
   };
   const crear = () => {
@@ -296,6 +296,10 @@ export default function Ruteo() {
                         data={opciones} value={f.trunk_id} searchable leftSection={<IconPlugConnected size={15} />}
                         onChange={(v) => setF({ ...f, trunk_id: v })}
                         nothingFoundMessage="Todavía no cargaste ninguna troncal" />
+                <TextInput label="CallerID de salida (opcional)"
+                           description="Con qué número de la troncal salir en ESTA regla. Vacío = el número por defecto de la troncal (se elige en Números)."
+                           placeholder="+59829001234" value={f.cid_number}
+                           onChange={(e) => setF({ ...f, cid_number: e.currentTarget.value })} />
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                   {modoR !== 'todo' && (
                     <TextInput label={modoR === 'destino' ? 'Código exacto' : 'Prefijo (empieza con)'} leftSection={<IconAsterisk size={14} />}

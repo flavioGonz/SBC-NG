@@ -126,8 +126,27 @@ async function validarKamailio() {
       'cp /etc/sbcng/seguridad.cfg /etc/kamailio/seguridad.cfg 2>/dev/null; ' +
       'cp /etc/sbcng/modulos.cfg /etc/kamailio/modulos.cfg 2>/dev/null; ' +
       'cp /etc/sbcng/stir.cfg /etc/kamailio/stir.cfg 2>/dev/null; ' +
+      // geoblock y tls_native tambien se incluyen desde la base: si faltan, un default
+      // inerte para que el include resuelva (si no, kamailio -c falla por archivo ausente).
+      'cp /etc/sbcng/geoblock.cfg /etc/kamailio/geoblock.cfg 2>/dev/null || echo "route[GEOBLOCK]{return;}" > /etc/kamailio/geoblock.cfg; ' +
+      'cp /etc/sbcng/registrar.cfg /etc/kamailio/registrar.cfg 2>/dev/null || echo "# registrar off" > /etc/kamailio/registrar.cfg; ' +
+      'cp /etc/sbcng/dids.cfg /etc/kamailio/dids.cfg 2>/dev/null || echo "# sin dids" > /etc/kamailio/dids.cfg; ' +
+      'cp /etc/sbcng/tls_native.cfg /etc/kamailio/tls_native.cfg 2>/dev/null || echo "# tls off" > /etc/kamailio/tls_native.cfg; ' +
+      // el modo TLS nativo carga tls.so y lee /etc/kamailio/tls.cfg con un cert: lo
+      // preparamos (autofirmado efimero) para que la validacion del modo nativo no falle.
+      'mkdir -p /etc/kamailio/tls; [ -f /etc/kamailio/tls/self.crt ] || openssl req -x509 -newkey rsa:2048 -nodes -days 3 -keyout /etc/kamailio/tls/self.key -out /etc/kamailio/tls/self.crt -subj "/CN=validate" >/dev/null 2>&1; ' +
+      'printf "[server:default]\\nprivate_key = /etc/kamailio/tls/self.key\\ncertificate = /etc/kamailio/tls/self.crt\\nverify_certificate = no\\nrequire_certificate = no\\n[client:default]\\nverify_certificate = no\\nrequire_certificate = no\\n" > /etc/kamailio/tls.cfg; ' +
+      // Sustituimos TODOS los @@TOKENS@@ (igual que el entrypoint): si queda uno literal
+      // —sobre todo @@TOPOH_DEFINE@@, que es una directiva— kamailio -c da parse error.
       'sed -i "s|@@DB_URL@@|postgres://x:x@127.0.0.1:5432/x|g; s|@@SELF_IP@@|127.0.0.1|g; ' +
-      's|@@PUBLIC_IP@@|127.0.0.1|g; s|@@TRUSTED_NET@@|127.0.0.0/24|g" /etc/kamailio/kamailio.cfg; ' +
+      's|@@PUBLIC_IP@@|127.0.0.1|g; s|@@TRUSTED_NET@@|127.0.0.0/24|g; s|@@METRICS_TOKEN@@|x|g; ' +
+      's|@@TOPOH_KEY@@|validatekey|g; s|@@TOPOH_DEFINE@@|@@TOPOHDEF@@|g" /etc/kamailio/kamailio.cfg; ' +
+      // topoh/topos son excluyentes: la validación tiene que usar el MISMO modo que el
+      // arranque real, si no validaríamos una config que después no es la que corre.
+      'TD="#!define SBCNG_TOPOH"; ' +
+      'if [ -f /etc/sbcng/topo.mode ]; then M=$(tr -d "[:space:]" < /etc/sbcng/topo.mode); ' +
+      '  [ "$M" = "topos" ] && TD="# topoh off (topos)"; [ "$M" = "none" ] && TD="# topo off"; fi; ' +
+      'sed -i "s|@@TOPOHDEF@@|${TD}|g" /etc/kamailio/kamailio.cfg; ' +
       'kamailio -c -f /etc/kamailio/kamailio.cfg',
     ],
     HostConfig: {

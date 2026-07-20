@@ -63,6 +63,10 @@ function planRouter(cfg, ifaces) {
   for (const n of [wan_if, lan_if]) {
     if (!nombres.includes(n)) throw new Error(`la placa ${n} no existe en este equipo`);
   }
+  for (const nm of [wan_if, lan_if]) {
+    const pl = ifaces.find((i) => i.name === nm);
+    if (pl && pl.deshabilitada) throw new Error(`la placa ${nm} está deshabilitada; habilitala antes de usarla como WAN/LAN`);
+  }
 
   const br = cfg.bridge || 'br0';
   pasos.push({ desc: 'Desarmar el puente si existia (venimos de modo switch)', cmd: ['sh', '-c', `ip link show ${br} >/dev/null 2>&1 && ip link del ${br} || true`] });
@@ -92,7 +96,7 @@ function planSwitch(cfg, ifaces) {
   // Miembros del puente: las placas marcadas LAN o en modo bridge. El propio puente
   // nunca es miembro de si mismo (parece obvio; con un br0 en la lista, no lo es).
   const miembros = ifaces
-    .filter((i) => i.name !== br && (i.rol === 'lan' || i.modo === 'bridge'))
+    .filter((i) => i.name !== br && !i.deshabilitada && (i.rol === 'lan' || i.modo === 'bridge'))
     .map((i) => i.name);
   if (miembros.length < 2) throw new Error('en modo switch hacen falta al menos dos placas en el puente');
 
@@ -107,9 +111,13 @@ function planSwitch(cfg, ifaces) {
   return pasos;
 }
 
+const pasosDeshabilitar = (ifaces) => (ifaces || [])
+  .filter((i) => i.deshabilitada)
+  .map((i) => ({ desc: `Bajar la placa ${i.name} (deshabilitada a propósito)`, cmd: ['ip', 'link', 'set', i.name, 'down'] }));
+
 function plan(cfg, ifaces, rutas) {
   const base = cfg.modo === 'switch' ? planSwitch(cfg, ifaces) : planRouter(cfg, ifaces);
-  const pasos = [...base, ...pasosRutas(rutas)];
+  const pasos = [...pasosDeshabilitar(ifaces), ...base, ...pasosRutas(rutas)];
   return pasos.map((p) => ({ ...p, texto: p.cmd[0] === 'sh' ? p.cmd[2] : p.cmd.join(' ') }));
 }
 

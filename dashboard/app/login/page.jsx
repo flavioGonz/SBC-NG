@@ -143,15 +143,15 @@ export default function Login() {
 
       {/* ── hero ───────────────────────────────────────────────────── */}
       <div className="sbc-hero">
+        {/* Video de intro de fondo: loop, mudo y sin controles. autoPlay sólo
+            arranca si está muted (política de los navegadores), por eso van los
+            cuatro atributos juntos. playsInline evita que iOS lo abra full-screen.
+            Encima va un velo oscuro (sbc-hero-veil) para que el texto se lea. */}
+        <video className="sbc-hero-video" autoPlay loop muted playsInline preload="auto" aria-hidden>
+          <source src="/SBC-intro.mp4" type="video/mp4" />
+        </video>
+        <div className="sbc-hero-veil" aria-hidden />
         <div className="sbc-hero-grid" aria-hidden />
-
-        {/* El logo en grande, flotando sobre un halo que respira. Entra dibujándose
-            (el escudo primero, después las dos conversaciones) y después no para
-            nunca: es la marca, no un adorno que se ve una vez y se apaga. */}
-        <div className="sbc-hero-logo" aria-hidden>
-          <span className="sbc-halo" />
-          <span className="sbc-flota"><Logo size={150} /></span>
-        </div>
 
         <div className="sbc-hero-inner">
           <h1>El borde de tu red<br /><span>hecho producto.</span></h1>
@@ -215,10 +215,16 @@ export default function Login() {
 
         .sbc-hero { position: relative; overflow: hidden; display: grid; align-items: center;
           background: linear-gradient(140deg, #0a0f18 0%, #0d1a30 55%, #06232e 100%); }
-        .sbc-hero-grid { position: absolute; inset: 0; opacity: .5;
+        .sbc-hero-video { position: absolute; inset: 0; width: 100%; height: 100%;
+          object-fit: cover; z-index: 0; }
+        /* Velo: oscurece el video y lo tiñe hacia el azul de la marca para que el
+           texto blanco tenga contraste sin importar qué fotograma esté pasando. */
+        .sbc-hero-veil { position: absolute; inset: 0; z-index: 1;
+          background: linear-gradient(140deg, rgba(10,15,24,.82) 0%, rgba(13,26,48,.68) 55%, rgba(6,35,46,.72) 100%); }
+        .sbc-hero-grid { position: absolute; inset: 0; z-index: 1; opacity: .5;
           background-image: linear-gradient(rgba(120,180,230,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(120,180,230,.06) 1px, transparent 1px);
           background-size: 46px 46px; mask-image: radial-gradient(900px 600px at 70% 40%, #000 30%, transparent 75%); }
-        .sbc-hero-inner { position: relative; padding: 0 64px; max-width: 620px; }
+        .sbc-hero-inner { position: relative; z-index: 2; padding: 0 64px; max-width: 620px; }
         .sbc-hero h1 { font-size: 44px; line-height: 1.08; font-weight: 800; letter-spacing: -.025em; margin: 0 0 18px;
           animation: sbcIn .5s .05s cubic-bezier(.2,.9,.3,1) both; }
         .sbc-hero h1 span { background: linear-gradient(90deg, #6a9aec, #4ad0e6); -webkit-background-clip: text; background-clip: text; color: transparent; }

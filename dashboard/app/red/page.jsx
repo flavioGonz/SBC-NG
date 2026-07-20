@@ -17,12 +17,12 @@ import { useState, useEffect } from 'react';
 import {
   Card, Group, Text, Badge, Table, Stack, Button, Modal, Select, TextInput, NumberInput,
   Switch, ThemeIcon, Alert, SimpleGrid, Code, Tooltip, SegmentedControl, List,
-  ActionIcon, Paper, Tabs, Loader,
+  ActionIcon, Paper, Tabs, Loader, Progress,
 } from '@mantine/core';
 import {
   IconNetwork, IconRouter, IconArrowsShuffle, IconAlertTriangle, IconDeviceFloppy,
   IconPlayerPlay, IconWorld, IconServer2, IconSettings, IconRoute, IconInfoCircle,
-  IconPlus, IconTrash, IconAffiliate, IconStethoscope, IconActivity, IconMapPin,
+  IconPlus, IconTrash, IconAffiliate, IconStethoscope, IconActivity, IconMapPin, IconShieldCheck,
 } from '@tabler/icons-react';
 import PageHeader from '../PageHeader';
 import { SkelFilas } from '../Skel';
@@ -156,12 +156,22 @@ export default function Red() {
   const [sucio, setSucio] = useState(false);
   const [rutaAbierta, setRutaAbierta] = useState(false);
   const [nr, setNr] = useState(RUTA_VACIA);
+  const [pend, setPend] = useState(null);       // commit-confirm en curso
+  const [test, setTest] = useState(null);       // resultado del self-test ('...' = corriendo)
+  const [apagar, setApagar] = useState(null);   // interfaz que se va a deshabilitar (modal)
 
   useEffect(() => {
     if (!data || sucio) return;
     setCfg(data.cfg);
     setIfaces(data.interfaces || []);
   }, [data, sucio]);
+
+  // Cuenta regresiva del commit-confirm (si nadie confirma, el backend revierte solo).
+  useEffect(() => {
+    if (!pend) return undefined;
+    const t = setInterval(() => setPend((p) => (p ? { ...p, resta: Math.max(0, Math.round((p.hasta - Date.now()) / 1000)) } : p)), 1000);
+    return () => clearInterval(t);
+  }, [pend && pend.hasta]);
 
   // `cargando` se apaga en cuanto llega la respuesta, pero `cfg` se llena en el useEffect,
   // o sea DESPUES de este render: sin esperar a la copia local, el primer render explota.
@@ -202,13 +212,29 @@ export default function Red() {
     catch (e) { toast(e.message, 'bad', { icon: 'enlace' }); }
   };
 
-  const aplicar = () => toastPromise(
-    api('/network/apply', { method: 'POST', body: { confirmar: true } }).then((r) => {
-      setPlan(null); recargar();
-      if (!r.ok) throw new Error(r.fallo || 'falló un paso');
-      return r;
-    }),
-    { loading: 'Aplicando…', success: 'Modo de red y rutas aplicados', error: (e) => `No se pudo aplicar: ${e.message}` });
+  const aplicar = async () => {
+    setPlan(null);
+    try {
+      const r = await api('/network/apply', { method: 'POST', body: { confirmar: true } });
+      recargar();
+      if (!r.ok) { toast(r.fallo || 'falló un paso', 'bad'); return; }
+      if (r.rollback && r.token) { setTest(null); setPend({ token: r.token, resta: r.expira_en, expira0: r.expira_en, hasta: Date.now() + r.expira_en * 1000 }); }
+      else toast('Modo de red y rutas aplicados', 'ok');
+    } catch (e) { toast('No se pudo aplicar: ' + e.message, 'bad'); }
+  };
+
+  // Commit-confirm: seguís conectado → confirmás; perdiste el panel → el SBC revierte solo.
+  const confirmarRed = () => toastPromise(
+    api('/network/confirm', { method: 'POST', body: { token: (pend && pend.token) || undefined } }).then(() => { setPend(null); setTest(null); recargar(); }),
+    { loading: 'Confirmando…', success: 'Cambio de red confirmado', error: 'No se pudo confirmar' });
+  const revertirRed = () => toastPromise(
+    api('/network/revert', { method: 'POST' }).then(() => { setPend(null); setTest(null); recargar(); }),
+    { loading: 'Revirtiendo…', success: 'Se volvió a la configuración anterior', error: 'No se pudo revertir' });
+  const probar = async () => {
+    setTest('...');
+    try { setTest(await api('/network/selftest', { method: 'POST' })); }
+    catch (e) { setTest({ ok: false, error: e.message }); }
+  };
 
   const crearRuta = () => toastPromise(
     api('/network/routes', { method: 'POST', body: nr }).then(() => { setRutaAbierta(false); setNr(RUTA_VACIA); recargar(); }),
@@ -299,9 +325,15 @@ export default function Red() {
             )}
           </Card>
 
-        {/* ═══ INTERFACES (el puente es una más), directo debajo del diagrama ══ */}
+        {/* ═══ INTERFACES + DIAGNÓSTICO como sub-pestañas, directo debajo del diagrama ══ */}
           <Card p={0} className="sbc-fade-in">
-            <Group p="lg" pb="sm" gap={9}>
+            <Tabs defaultValue="ifaces" variant="pills" radius="md" keepMounted={false}>
+              <Tabs.List p="sm" pb={4}>
+                <Tabs.Tab value="ifaces" leftSection={<IconSettings size={15} />}>Interfaces</Tabs.Tab>
+                <Tabs.Tab value="diag" leftSection={<IconStethoscope size={15} />}>Diagnóstico</Tabs.Tab>
+              </Tabs.List>
+              <Tabs.Panel value="ifaces">
+            <Group p="md" pt={4} pb="sm" gap={9}>
               <ThemeIcon size={30} radius="md" variant="light" color="cyan"><IconSettings size={17} /></ThemeIcon>
               <Text fw={700}>Interfaces</Text>
               <Text size="xs" c="dimmed">el estado sale del kernel; el rol y la IP los definís vos</Text>
@@ -310,7 +342,7 @@ export default function Red() {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Placa</Table.Th><Table.Th>Tipo</Table.Th><Table.Th>Enlace</Table.Th><Table.Th>Rol</Table.Th>
-                  <Table.Th>Modo</Table.Th><Table.Th>IP</Table.Th><Table.Th>VLAN</Table.Th><Table.Th>Tráfico</Table.Th>
+                  <Table.Th>Modo</Table.Th><Table.Th>IP</Table.Th><Table.Th>VLAN</Table.Th><Table.Th>Tráfico</Table.Th><Table.Th style={{ textAlign: 'center' }}>Activa</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -384,23 +416,32 @@ export default function Red() {
                           {fmtBps(i.rx_bps)} ↓<br />{fmtBps(i.tx_bps)} ↑
                         </Text>
                       </Table.Td>
+                      <Table.Td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        {esPuente ? <Text size="xs" c="dimmed">—</Text> : (
+                          <Tooltip label={i.deshabilitada ? 'Deshabilitada (baja al aplicar)' : 'Activa'}>
+                            <Switch size="sm" color="teal" checked={!i.deshabilitada}
+                                    onChange={(ev) => { if (ev.currentTarget.checked) editar(i.name, 'deshabilitada', false); else setApagar(i); }} />
+                          </Tooltip>
+                        )}
+                      </Table.Td>
                     </Table.Tr>
                   );
                 })}
               </Table.Tbody>
             </Table>
+              </Tabs.Panel>
+              <Tabs.Panel value="diag" p="md"><Diagnostico sugerencias={sugerencias} /></Tabs.Panel>
+            </Tabs>
           </Card>
       </SimpleGrid>
 
-      {/* ═══ RUTAS y DIAGNÓSTICO sí van en pestañas: son tareas puntuales, no
-           el estado del equipo que se mira de un vistazo. ═══════════════════ */}
+      {/* ═══ RUTAS estáticas: tarea puntual, aparte del estado que se mira de un vistazo. ═══ */}
       <Tabs defaultValue="rutas" variant="pills" radius="md" keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="rutas" leftSection={<IconRoute size={15} />}>
             Rutas estáticas
             {estaticas.length > 0 && <Badge size="xs" variant="light" color="grape" ml={6}>{estaticas.length}</Badge>}
           </Tabs.Tab>
-          <Tabs.Tab value="diag" leftSection={<IconStethoscope size={15} />}>Diagnóstico</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="rutas">
@@ -487,7 +528,6 @@ export default function Red() {
           </SimpleGrid>
         </Tabs.Panel>
 
-        <Tabs.Panel value="diag"><Diagnostico sugerencias={sugerencias} /></Tabs.Panel>
       </Tabs>
 
       {/* ── nueva ruta ──────────────────────────────────────────────────────── */}
@@ -539,6 +579,48 @@ export default function Red() {
         <Group justify="flex-end">
           <Button variant="default" onClick={() => setPlan(null)}>Cancelar</Button>
           <Button color="red" leftSection={<IconPlayerPlay size={16} />} onClick={aplicar}>Aplicar de verdad</Button>
+        </Group>
+      </Modal>
+
+      {/* ── commit-confirm: confirmá o el SBC revierte solo ─────────────────── */}
+      <Modal opened={!!pend} onClose={() => {}} withCloseButton={false} closeOnClickOutside={false} closeOnEscape={false}
+             title="Confirmá que seguís conectado" centered>
+        <Stack gap="md">
+          <Alert color={pend && pend.resta <= 0 ? 'red' : 'orange'} variant="light" icon={<IconAlertTriangle size={18} />}>
+            Se aplicó el cambio de red. Si <b>perdés el panel</b> es porque el cambio te dejó afuera: no confirmes y en
+            unos segundos el SBC vuelve solo a la configuración anterior.
+          </Alert>
+          <div>
+            <Group justify="space-between" mb={4}>
+              <Text size="sm" fw={600}>Auto-rollback en</Text>
+              <Text size="sm" fw={700} ff="monospace">{pend ? pend.resta : 0}s</Text>
+            </Group>
+            <Progress value={pend && pend.expira0 ? (pend.resta / pend.expira0) * 100 : 0} color="orange" animated />
+          </div>
+          {test && test !== '...' && (
+            <Alert color={test.ok ? 'teal' : 'red'} variant="light" icon={test.ok ? <IconShieldCheck size={16} /> : <IconAlertTriangle size={16} />}>
+              {test.ok ? `El SBC llega a ${test.target} (${test.ms} ms)` : (test.error || `El SBC no llega a ${test.target || 'su gateway'}`)}
+            </Alert>
+          )}
+          <Group justify="space-between">
+            <Button variant="default" leftSection={<IconStethoscope size={16} />} loading={test === '...'} onClick={probar}>Probar conexión</Button>
+            <Group gap="sm">
+              <Button color="red" variant="light" onClick={revertirRed}>Revertir ya</Button>
+              <Button color="teal" leftSection={<IconShieldCheck size={16} />} onClick={confirmarRed}>Confirmar</Button>
+            </Group>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* ── deshabilitar una interfaz ───────────────────────────────────────── */}
+      <Modal opened={!!apagar} onClose={() => setApagar(null)} title="Deshabilitar interfaz" centered>
+        <Alert color="orange" variant="light" icon={<IconAlertTriangle size={18} />} mb="md">
+          Vas a bajar la placa <b>{apagar ? apagar.name : ''}</b>. Si es la que usás para llegar al panel, vas a perder
+          la gestión. El cambio entra cuando toques <b>Aplicar</b> (con confirmación y auto-rollback).
+        </Alert>
+        <Group justify="flex-end">
+          <Button variant="default" onClick={() => setApagar(null)}>Cancelar</Button>
+          <Button color="orange" onClick={() => { editar(apagar.name, 'deshabilitada', true); setApagar(null); }}>Deshabilitar</Button>
         </Group>
       </Modal>
     </Stack>

@@ -46,6 +46,15 @@ async function sincronizar(tenant = 1) {
       WHERE r.tenant_id=$1 AND r.enabled AND r.trunk_id IS NOT NULL
       ORDER BY r.priority, r.id`, [tenant]);
 
+  // CallerID de salida por defecto = el número del pool marcado es_cid_default (si hay).
+  // Cae a from_user y a username. Así "con qué número salgo" se elige desde /numeros.
+  let cidDefault = {};
+  try {
+    const nn = await db.get(
+      'SELECT trunk_id, number FROM sbc_trunk_numbers WHERE tenant_id=$1 AND es_cid_default AND enabled', [tenant]);
+    for (const n of nn) cidDefault[n.trunk_id] = n.number;
+  } catch (_) {}
+
   const c = await db.pool.connect();
   try {
     await c.query('BEGIN');
@@ -82,7 +91,7 @@ async function sincronizar(tenant = 1) {
         `INSERT INTO uac_reg (l_uuid, l_username, l_domain, r_username, r_domain, realm,
                               auth_username, auth_password, expires, flags, reg_delay)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,3600,0,0)`,
-        ['trunk' + t.id, t.from_user || t.username, t.from_domain || t.provider_host,
+        ['trunk' + t.id, cidDefault[t.id] || t.from_user || t.username, t.from_domain || t.provider_host,
          t.username, t.provider_host, t.realm || t.provider_host,
          t.username, t.password || '']);
     }

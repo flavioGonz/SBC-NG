@@ -11,7 +11,7 @@ import {
   IconServer2, IconPlugConnected, IconWaveSine, IconLogout, IconSun, IconMoon,
   IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconChevronRight,
   IconNetwork, IconFilter, IconArrowsExchange, IconEngine, IconBug, IconRouteAltLeft, IconMail, IconReceipt,
-  IconBook, IconRocket, IconBellRinging, IconShieldLock,
+  IconBook, IconRocket, IconBellRinging, IconShieldLock, IconUsers, IconHash, IconCertificate, IconDatabaseExport,
 } from '@tabler/icons-react';
 import { useAuth, logout } from './auth';
 import { usePoll } from './api';
@@ -31,6 +31,7 @@ const groups = [
     { href: '/centrales', label: 'Centrales PBX', icon: IconServer2, countKey: 'centrales' },
     { href: '/troncales', label: 'Troncales', icon: IconPlugConnected, countKey: 'troncales' },
     { href: '/ruteo', label: 'Ruteo de salida', icon: IconRouteAltLeft, countKey: 'rutas' },
+    { href: '/dialplan', label: 'Traducción de números', icon: IconArrowsExchange },
     { href: '/registros', label: 'Extensiones SIP', icon: IconWaveSine, countKey: 'extensiones' },
   ] },
   { label: 'SIP y Medios', icon: IconArrowsExchange, items: [
@@ -48,6 +49,9 @@ const groups = [
     { href: '/ajustes', label: 'Ajustes · Email', icon: IconMail },
     { href: '/notificaciones', label: 'Notificaciones', icon: IconBellRinging },
     { href: '/manuales', label: 'Manuales', icon: IconBook },
+    { href: '/respaldos', label: 'Respaldos', icon: IconDatabaseExport, adminOnly: true },
+    { href: '/certificados', label: 'Certificados TLS', icon: IconCertificate, adminOnly: true },
+    { href: '/usuarios', label: 'Usuarios', icon: IconUsers, adminOnly: true },
   ] },
 ];
 
@@ -70,6 +74,7 @@ export default function Shell({ children }) {
 
 function ShellInterno({ children, path, rail, abiertos, toggleRail, toggleGroup, isActive }) {
   const { user } = useAuth();
+  const esAdmin = !!(user && user.role === 'admin');
   const { setColorScheme } = useMantineColorScheme();
   const scheme = useComputedColorScheme('dark');
   const toggleScheme = () => setColorScheme(scheme === 'dark' ? 'light' : 'dark');
@@ -162,7 +167,7 @@ function ShellInterno({ children, path, rail, abiertos, toggleRail, toggleGroup,
                     </UnstyledButton>
                   )}
                   <Collapse in={opened}>
-                    <Box mt={2}>{g.items.map(navItem)}</Box>
+                    <Box mt={2}>{g.items.filter((it) => !it.adminOnly || esAdmin).map(navItem)}</Box>
                   </Collapse>
                 </Box>
               );
