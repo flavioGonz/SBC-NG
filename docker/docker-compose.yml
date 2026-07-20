@@ -50,9 +50,11 @@ services:
       # El codigo solo puede tocar los contenedores del propio SBC (lista blanca).
       - /var/run/docker.sock:/var/run/docker.sock
       - sbc_conf:/etc/sbcng
+      - respaldos:/respaldos
     environment:
       PORT: 3100
       CONF_DIR: /etc/sbcng
+      REPORT_PBX_DB: 
       COMPOSE_PROJECT: sbcng
       DB_HOST: 127.0.0.1
       DB_NAME: ${DB_NAME:-sbcng}
@@ -158,5 +160,8 @@ services:
 
 volumes:
   sbc_db:
+  # Archivos de respaldo. Volumen propio para que no se mezclen con la config
+  # generada ni vivan en el disco del contenedor (se perderian al recrearlo).
+  respaldos:
   # Config generada por el panel (rtpengine.env, coturn.env, reglas.cfg, seguridad.cfg).
   sbc_conf:

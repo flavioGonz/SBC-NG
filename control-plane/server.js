@@ -22,6 +22,7 @@ const net = require('./network');
 const netmode = require('./netmode');
 const cfgen = require('./config');
 const motores = require('./docker');
+const backup = require('./backup');    // respaldo y restauracion del appliance
 const publica = require('./publica');
 const monitor = require('./monitor');
 const correo = require('./email');
@@ -1600,6 +1601,53 @@ async function _flowSecret() {
   }
   return s;
 }
+
+// ---------------- Respaldo y restauración ----------------
+// Mismo formato de manifiesto que PBX-NG: ver la cabecera de backup.js.
+app.get('/api/v1/backup', async (req, res) => {
+  try { res.json({ respaldos: await backup.listar() }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/v1/backup', async (req, res) => {
+  try { res.status(201).json(await backup.crear({ geoip: !!(req.body && req.body.geoip), nota: (req.body && req.body.nota) || '' })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/v1/backup/:nombre/archivo', (req, res) => {
+  let f; try { f = backup.seguro(req.params.nombre); } catch (e) { return res.status(400).json({ error: e.message }); }
+  res.download(f, req.params.nombre, (e) => { if (e && !res.headersSent) res.status(404).json({ error: 'no existe ese respaldo' }); });
+});
+
+app.get('/api/v1/backup/:nombre/inspeccionar', async (req, res) => {
+  try { res.json(await backup.inspeccionar(req.params.nombre)); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete('/api/v1/backup/:nombre', async (req, res) => {
+  try { await backup.borrar(req.params.nombre); res.json({ borrado: req.params.nombre }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// Stream crudo, no JSON: un base64 dentro de un JSON multiplica por 1.33 y se come la
+// memoria del proceso.
+app.post('/api/v1/backup/subir/:nombre', express.raw({ type: '*/*', limit: '2gb' }), async (req, res) => {
+  try {
+    const f = backup.seguro(req.params.nombre);
+    if (!req.body || !req.body.length) return res.status(400).json({ error: 'el archivo llegó vacío' });
+    require('fs').writeFileSync(f, req.body);
+    const m = await backup.inspeccionar(req.params.nombre).catch((e) => ({ error: e.message }));
+    if (m && m.error) { try { require('fs').unlinkSync(f); } catch (_) {} return res.status(400).json({ error: m.error }); }
+    res.status(201).json({ subido: req.params.nombre, manifiesto: m });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Restaura los archivos y la base, pero NO reinicia Kamailio: aplicar es una decisión
+// aparte, y el camino de "aplicar" del panel ya trae validación y rollback.
+app.post('/api/v1/backup/:nombre/restaurar', async (req, res) => {
+  try { res.json(await backup.restaurar(req.params.nombre, { confirmar: !!(req.body && req.body.confirmar) })); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
 
 app.get('/api/v1/registrar', async (req, res) => {
   try {
